@@ -1,2 +1,2 @@
-# 2025-hackathon-FE
+# Planty-FE
 멋쟁이 사자처럼 13기 중앙해커톤 프론트엔드
