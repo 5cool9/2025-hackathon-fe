@@ -6,7 +6,7 @@ import ImageUploader from '@/components/ui/ImageUploader';
 import Input from '@/components/ui/Input';
 import MethodDescription from '@/components/ui/MethodDescription';
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import 'react-native-gesture-handler';
 
 
@@ -20,7 +20,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Hello, My First App! 🎉</Text>
 
       {/* 이미지 업로더 */}
       <ImageUploader onSelect={setUploadedImage} />
@@ -41,9 +40,9 @@ export default function HomeScreen() {
       <Input value={date} onChangeText={setDate} placeholder="yy-mm-dd" inputType="date" iconName="calendar" />
 
       <MethodDescription
-  headerText="상단 헤더 텍스트"
-  bodyText="네모 박스 안에 들어갈 본문 텍스트"
-/>
+        headerText="상단 헤더 텍스트"
+        bodyText="네모 박스 안에 들어갈 본문 텍스트"
+      />
 
     </View>
   );
@@ -62,3 +61,5 @@ const styles = StyleSheet.create({
     color: '#333',
   },
 });
+
+
