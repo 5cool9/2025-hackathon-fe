@@ -30,6 +30,7 @@ export default function HomeScreen() {
 
       <BtnLong label="확인" onPress={() => console.log('확인 클릭')} disabled={false} />
 
+
       <BtnOval label="현재 상태 분석" />
       <BtnOval label="질병 여부 분석" />
 

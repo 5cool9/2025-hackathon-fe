@@ -63,7 +63,7 @@ export default function Input({
           >
             <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
               <View style={styles.modalBackground}>
-                {/* 모달 컨텐츠 터치 막기 위해 한 번 더 TouchableWithoutFeedback */}
+          
                 <TouchableWithoutFeedback>
                   <View style={styles.modalContainer}>
                     <DateTimePicker
@@ -92,7 +92,6 @@ export default function Input({
     );
   }
 
-  // password, text input
   return (
     <View style={styles.container}>
       <TextInput

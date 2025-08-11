@@ -24,7 +24,7 @@ type BtnAddPhotoProps = {
   onSelect: (photos: string[]) => void;
 };
 
-// iOS ph:// 스킴 변환 함수
+
 async function getLocalFileUri(uri: string): Promise<string> {
   if (!uri.startsWith('ph://')) return uri;
   try {
@@ -175,7 +175,7 @@ export default function BtnAddPhoto({ onSelect }: BtnAddPhotoProps) {
           
         </TouchableOpacity>
 
-        {/* 선택된 사진들 썸네일 스크롤 영역 */}
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

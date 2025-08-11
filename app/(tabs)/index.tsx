@@ -4,7 +4,6 @@ import BtnOval from '@/components/ui/BtnOval';
 import BtnToggle from '@/components/ui/BtnToggle';
 import ImageUploader from '@/components/ui/ImageUploader';
 import Input from '@/components/ui/Input';
-import MethodDescription from '@/components/ui/MethodDescription';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import 'react-native-gesture-handler';
@@ -39,12 +38,6 @@ export default function HomeScreen() {
       <Input value={id} onChangeText={setId} placeholder="이름" inputType="text" />
       <Input value={password} onChangeText={setPassword} placeholder="비밀번호 입력" inputType="password" iconName="eye" />
       <Input value={date} onChangeText={setDate} placeholder="yy-mm-dd" inputType="date" iconName="calendar" />
-
-      <MethodDescription
-  headerText="상단 헤더 텍스트"
-  bodyText="네모 박스 안에 들어갈 본문 텍스트"
-/>
-
     </View>
   );
 }
