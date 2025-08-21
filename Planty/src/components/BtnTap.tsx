@@ -3,14 +3,36 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Image, StyleSheet, View } from 'react-native';
 import { colors, spacing } from '../theme/tokens';
-
-// 각 화면 import (screens 폴더 기준)
-import HomeScreen from '../screens/HomeScreen';
-import ChatScreen from '../screens/ChatScreen';
-import SellScreen from '../screens/SellScreen';
-import MyPageScreen from '../screens/MypageScreen';
+import HomeStack from '../navigation/HomeStack';
+import ChatStack from '../navigation/ChatStack';
+import SellStack from '../navigation/SellStack';
+import MyStack from '../navigation/MyStack';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 
 const Tab = createBottomTabNavigator();
+
+// ✅ 숨겨야 할 Sell 스택의 화면들만 판단
+function hideTabBarOnSell(route: any) {
+  const rn = getFocusedRouteNameFromRoute(route) ?? 'SellList';
+  return ['SellDetail', 'SellCreate', 'AIChat'].includes(rn); // ← AIChat 추가
+}
+
+function hideTabBarOnMy(route: any) {
+  const rn = getFocusedRouteNameFromRoute(route) ?? 'MyHome';
+  return rn === 'ProfileEdit';
+}
+
+// ✅ base 스타일을 한 곳에서만 사용(객체 재생성 방지)
+const TAB_BAR_BASE_STYLE = {
+  height: 64,
+  paddingTop: 18,
+  paddingHorizontal: spacing.lg,
+  borderTopWidth: 1,
+  borderTopColor: colors.border,
+  backgroundColor: colors.bg,
+  elevation: 0,
+  shadowOpacity: 0,
+} as const;
 
 export default function BtmTap() {
   return (
@@ -31,48 +53,62 @@ export default function BtmTap() {
               iconSource = focused
                 ? require('../../assets/icon/tapbtnSaleOn.png')
                 : require('../../assets/icon/tapbtnSaleOff.png');
-            } else if (route.name === 'MyPage') {
+            } else {
               iconSource = focused
                 ? require('../../assets/icon/tapbtnMyOn.png')
                 : require('../../assets/icon/tapbtnMyOff.png');
             }
-
-            return <Image source={iconSource} style={styles.icon} resizeMode="contain" />; // ✅ contain으로
-
+            return <Image source={iconSource} style={styles.icon} resizeMode="contain" />;
           },
           tabBarShowLabel: false,
-          tabBarStyle: styles.tab_bar_style,
-          tabBarItemStyle: styles.tab_bar_item_style,
           headerShown: false,
+          tabBarStyle: TAB_BAR_BASE_STYLE,
+          tabBarItemStyle: styles.tab_bar_item_style,
         })}
       >
-        <Tab.Screen name="Home" component={HomeScreen} />
-        <Tab.Screen name="Chat" component={ChatScreen} />
-        <Tab.Screen name="Sell" component={SellScreen} />
-        <Tab.Screen name="MyPage" component={MyPageScreen} />
+        <Tab.Screen name="Home" component={HomeStack} />
+        <Tab.Screen name="Chat" component={ChatStack} />
+
+        {/* ✅ Sell 탭은 여기서만 show/hide 제어 (배경 스타일은 항상 BASE 유지) */}
+        <Tab.Screen
+          name="Sell"
+          component={SellStack}
+          options={({ route }) => ({
+            tabBarStyle: [
+              TAB_BAR_BASE_STYLE,
+              hideTabBarOnSell(route) ? { display: 'none' } : null,
+            ],
+          })}
+        />
+
+         {/* ✅ My 탭을 스택으로 */}
+        <Tab.Screen
+          name="My"
+          component={MyStack}
+          options={({ route }) => ({
+            tabBarStyle: hideTabBarOnMy(route) ? { display: 'none' } : styles.tab_bar_style,
+          })}
+        />
       </Tab.Navigator>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  icon: {
-    width: 50,
-    height: 50,
-  },
+  icon: { width: 50, height: 50 },
   tab_bar_style: {
     height: 64,
-    paddingTop:18,
-    paddingHorizontal: spacing.lg,     // 좌우 여백
+    paddingTop: 18,
+    paddingHorizontal: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.bg,
-    elevation: 0,                  // Android 그림자 제거
-    shadowOpacity: 0,              // iOS 그림자 제거
+    elevation: 0,
+    shadowOpacity: 0,
   },
   tab_bar_item_style: {
     marginHorizontal: spacing.md,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
   },
 });

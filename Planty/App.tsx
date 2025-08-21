@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler'; //가장 첫줄에 임포트 해야함
 import React from 'react';
 import { SafeAreaView } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
