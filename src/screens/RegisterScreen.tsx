@@ -1,13 +1,13 @@
-import React, { useState, useContext } from 'react';
-import { View, Text, SafeAreaView, TouchableOpacity, Image, StyleSheet, Dimensions } from 'react-native';
-import { colors, fontSize, spacing as SP } from '../theme/tokens';
+import React, { useState } from 'react';
+import { View, Text, SafeAreaView, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
+import { colors, spacing as SP } from '../theme/tokens';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import Arrowicon from '../../assets/icon/icon_arrowLeft.svg';
 import ImageUploader from '../components/ImageUploader';
 import Input from '../components/Input';
 import BtnLong from '../components/BtnLong';
-import { AppStackParamList } from '../navigation/types'; // AppStack 타입 import
-import { RegisterContext, UserRegisterData, useRegister } from '../context/RegisterContext'; 
+import { AppStackParamList } from '../navigation/types'; 
+import { useRegister } from '../context/RegisterContext'; 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HORIZONTAL_PADDING = SCREEN_WIDTH * 0.04; 
@@ -15,21 +15,25 @@ const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
 
 export default function RegisterScreen() {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
-
-  const { saveTempData, finalizeData, addUserData, userData } = useRegister();
+  const { saveTempData, finalizeData } = useRegister();
   
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [textValue, setTextValue] = useState('');
   const [dateValue1, setDateValue1] = useState('');
   const [dateValue2, setDateValue2] = useState('');
 
+  // 날짜 비교 로직 추가
+  const isValidDateRange =
+    !dateValue1 || !dateValue2 || new Date(dateValue1) <= new Date(dateValue2);
+
   const isButtonEnabled =
     uploadedImage !== null &&
     textValue.trim() !== '' &&
     dateValue1.trim() !== '' &&
-    dateValue2.trim() !== '';
+    dateValue2.trim() !== '' &&
+    isValidDateRange;
 
-    const handleTempSave = () => {
+  const handleTempSave = () => {
     saveTempData({
       name: textValue,
       startDate: dateValue1,
@@ -41,19 +45,24 @@ export default function RegisterScreen() {
   const handleFinalize = () => {
     finalizeData();
     if (uploadedImage) {
-        navigation.navigate('AnalyzeScreen', { image: uploadedImage });
+      navigation.navigate('AnalyzeScreen', { image: uploadedImage });
     }
   };
 
   const handleRegister = () => {
-    if (!isButtonEnabled) return;
+    if (!isButtonEnabled) {
+      if (!isValidDateRange) {
+        Alert.alert('날짜 오류', '수확 예정일은 재배 시작일 이후여야 합니다.');
+      }
+      return;
+    }
     handleTempSave(); 
-    handleFinalize(); // 또는 필요에 따라 handleTempSave + handleFinalize
+    handleFinalize();
   };
 
   return (
     <SafeAreaView style={styles.safe}>
-
+      {/* 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Arrowicon width={30} height={30} />
@@ -62,8 +71,10 @@ export default function RegisterScreen() {
         <View style={{ width: 30 }} /> 
       </View>
 
+      {/* 입력 영역 */}
       <View style={styles.container}>
         <ImageUploader onSelect={setUploadedImage} />
+
         <View style={[styles.row, { marginTop: 24, marginBottom: 4 }]}>
           <Text style={styles.label}>작물 이름</Text>
           <Input
@@ -101,24 +112,24 @@ export default function RegisterScreen() {
         </View>
       </View>
       
+      {/* 버튼 */}
       <View style={styles.buttonContainer}>
         <BtnLong
-        label="작물 등록하기"
-        onPress={handleRegister} 
-        disabled={!isButtonEnabled}
-        style={{
+          label="작물 등록하기"
+          onPress={handleRegister} 
+          disabled={!isButtonEnabled}
+          style={{
             width: SCREEN_WIDTH * 0.9,
             backgroundColor: isButtonEnabled ? '#7EB85B' : '#D6D6D6',
-        }}
-        labelStyle={{
+          }}
+          labelStyle={{
             paddingHorizontal: 16,
             paddingVertical: 12,
             fontSize: 20,
             fontWeight: '600',
             color: '#fff',
-            }}
+          }}
         />
-
       </View>
     </SafeAreaView>
   );

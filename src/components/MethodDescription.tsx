@@ -1,7 +1,7 @@
 // src/components/MethodDescription.tsx
 import React from 'react';
 import { StyleSheet, Text, View, Dimensions } from 'react-native';
-import { colors, spacing as SP, radius, txt } from '../theme/tokens';
+import { colors, spacing as SP, txt } from '../theme/tokens';
 
 type Props = {
   headerText: string;
@@ -11,7 +11,8 @@ type Props = {
   isVisible?: boolean;
 };
 
-const screenWidth = Dimensions.get('window').width; // 화면 전체 폭
+const screenWidth = Dimensions.get('window').width;
+const CONTENT_WIDTH = screenWidth * 0.9; // ✅ 버튼/다른 컴포넌트와 동일 폭
 
 export default function MethodDescription({ headerText, bodyText, headerRight, isVisible = true }: Props) {
   return (
@@ -25,9 +26,9 @@ export default function MethodDescription({ headerText, bodyText, headerRight, i
       </View>
 
       {isVisible && (
-      <View style={styles.box}>
-        <Text style={styles.body}>{bodyText}</Text>
-      </View>
+        <View style={styles.box}>
+          <Text style={styles.body}>{bodyText}</Text>
+        </View>
       )}
     </View>
   );
@@ -35,31 +36,31 @@ export default function MethodDescription({ headerText, bodyText, headerRight, i
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center', // 박스 중앙 유지
     marginVertical: SP.md,
     gap: SP.sm,
+    width: CONTENT_WIDTH,
+    alignSelf: 'center', // 전체 컨테이너를 가운데
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    width: '100%',     // 화면 전체 폭 사용
+    width: '100%', // container 안에서 꽉 차게
+    // paddingHorizontal 제거
   },
   header: {
     fontSize: 20,
     fontWeight: '700',
     color: colors.gray90,
-    flex: 1,           // 남은 공간 차지
-    marginRight: 10,   // 오른쪽 토글과 간격
-    paddingLeft: SP.lg,
+    flex: 1,
+    marginRight: 10,
+    // paddingLeft 제거
   },
   box: {
     backgroundColor: colors.gray10,
     borderRadius: 8,
     padding: SP.lg,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    width: screenWidth * 0.9,
+    width: '100%', // container와 동일
   },
   body: {
     ...txt.B2,

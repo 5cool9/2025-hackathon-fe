@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, SafeAreaView, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, SafeAreaView, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
 import { colors } from '../theme/tokens';
 import { useNavigation, NavigationProp, useRoute, RouteProp } from '@react-navigation/native';
 import Arrowicon from '../../assets/icon/icon_arrowLeft.svg';
@@ -42,9 +42,30 @@ export default function EditRegisterScreen() {
     setDateValue2(route.params?.endDate ?? tempData?.endDate ?? '');
   }, [route.params, tempData]);
 
+  // ✅ 날짜 유효성 검사 함수
+  const isValidDateRange = (start: string, end: string) => {
+    if (!start || !end) return true; // 아직 입력 안 했으면 true
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    return startDate <= endDate;
+  };
+
+  // ✅ 버튼 활성화 조건
+  const isButtonEnabled =
+    uploadedImage !== null &&
+    textValue.trim() !== '' &&
+    dateValue1.trim() !== '' &&
+    dateValue2.trim() !== '' &&
+    isValidDateRange(dateValue1, dateValue2);
+
   const handleButtonPress = () => {
     if (!uploadedImage || !textValue || !dateValue1 || !dateValue2) {
-      alert('모든 항목을 입력해주세요.');
+      Alert.alert('입력 오류', '모든 항목을 입력해주세요.');
+      return;
+    }
+
+    if (!isValidDateRange(dateValue1, dateValue2)) {
+      Alert.alert('날짜 오류', '재배 시작일은 수확 예정일보다 늦을 수 없습니다.');
       return;
     }
 
@@ -56,13 +77,8 @@ export default function EditRegisterScreen() {
       endDate: dateValue2,
     };
 
-    // 임시 저장
     saveTempData(newData);
-
-    // Context의 finalizeData 사용 -> 수정/추가 바로 반영
     finalizeData(newData);
-
-    // 홈 화면으로 돌아가기
     navigation.navigate('MainTab');
   };
 
@@ -129,11 +145,12 @@ export default function EditRegisterScreen() {
         <BtnLong
           label="등록"
           onPress={handleButtonPress}
+          disabled={!isButtonEnabled}
           style={{
             width: '100%',
             height: 54,
             borderRadius: 4,
-            backgroundColor: '#7EB85B',
+            backgroundColor: isButtonEnabled ? '#7EB85B' : '#D6D6D6',
           }}
         />
       </View>
