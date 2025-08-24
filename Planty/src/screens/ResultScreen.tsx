@@ -1,6 +1,6 @@
-import React from "react";
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Image } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Arrowicon from "../../assets/icon/icon_arrowLeft.svg";
 import CardPlantInfo from "../components/CardPlantInfo";
@@ -8,44 +8,80 @@ import MethodDescription from "../components/MethodDescription";
 import BtnLong from "../components/BtnLong";
 import { colors } from "../theme/tokens";
 import { Dimensions } from "react-native";
-import { AppStackParamList } from '../navigation/types';
-import { useRegister } from '../context/RegisterContext';
-
+import { AppStackParamList } from "../navigation/types";
+import { getAccessToken } from '../utils/token';
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const HORIZONTAL_PADDING = SCREEN_WIDTH * 0.04; 
-const CONTENT_WIDTH = SCREEN_WIDTH * 0.9; 
+const HORIZONTAL_PADDING = SCREEN_WIDTH * 0.04;
+const CONTENT_WIDTH = SCREEN_WIDTH * 0.9;
 
-
-type RootStackParamList = {
-  AnalyzeScreen: { image: string };
-  ResultScreen: { image: string; result: string };
-};
-
+type ResultScreenRouteProp = RouteProp<AppStackParamList, "ResultScreen">;
 type ResultScreenNavigationProp = NativeStackNavigationProp<AppStackParamList, "ResultScreen">;
 
 export default function ResultScreen() {
   const navigation = useNavigation<ResultScreenNavigationProp>();
-  const route = useRoute<any>();
-  const { tempData } = useRegister();
-  const image = tempData?.image || "";  
-  const name = tempData?.name || "";  
-  const { saveTempData } = useRegister();
-  
+  const route = useRoute<ResultScreenRouteProp>();
+
+  // AnalyzeScreen에서 전달받은 param
+  const { image, name, startDate, endDate, tempCropId, analysisResult } = route.params;
+
+  // 서버에서 가져온 결과 저장할 state (optional)
+  const [loading, setLoading] = useState(!analysisResult);
+  const [result, setResult] = useState<any>(analysisResult || null);
+
+  useEffect(() => {
+  if (!analysisResult && tempCropId) {
+    const fetchResult = async () => {
+      try {
+        setLoading(true);
+        const token = getAccessToken(); // 토큰 가져오기
+        if (!token) {
+          Alert.alert("오류", "로그인 토큰이 없습니다.");
+          return;
+        }
+
+        const res = await fetch(`http://43.200.244.250/api/crop/analysis-status/${tempCropId}`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error(`서버 응답 오류: ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (data.success) {
+          setResult(data.analysisResult); // 명세서에 맞춰 analysisResult 사용
+        } else {
+          Alert.alert("결과 조회 실패", data.message || "서버에서 데이터를 불러올 수 없습니다.");
+        }
+      } catch (error: any) {
+        console.error("분석 상태 조회 에러:", error);
+        Alert.alert("결과 조회 실패", "서버에서 데이터를 불러올 수 없습니다.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+
+    fetchResult();
+  }
+}, [tempCropId, analysisResult]);
+
+
   const handleButtonPress = () => {
-  saveTempData({
-    image,
-    name,
-    startDate: tempData?.startDate,
-    endDate: tempData?.endDate,
-  });
-
-  navigation.navigate('EditregisterScreen', {
-  image: image, // string
-  name: name       // string
-});
-};
-
+    navigation.navigate("EditregisterScreen", {
+      tempCropId,
+      image,
+      name,
+      startDate,
+      endDate,
+      analysisResult: result,
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -58,40 +94,48 @@ export default function ResultScreen() {
         <View style={{ width: 30 }} />
       </View>
 
-    <View style={{ marginTop: 24 }}>
-      <CardPlantInfo
-        thumbnail={image}   // AnalyzeScreen에서 넘겨준 사진 사용
-        name={name}    // 지금은 하드코딩, 나중에 API 연결 가능
-        envPlace="온실"
-        temp="25°C"
-        height="30cm"
-        mode="environment" 
-      />
-    </View>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ marginTop: 10 }}>결과를 불러오는 중...</Text>
+        </View>
+      ) : (
+        <>
+          {/* 작물 카드 */}
+          <View style={styles.cardWrapper}>
+            <CardPlantInfo
+              thumbnail={image}
+              name={name}
+              envPlace={result?.environment || "정보 없음"}
+              temp={result?.temperature ? `${result.temperature}°C` : "-"}
+              height={result?.height || "-"}
+              mode="environment"
+            />
+          </View>
 
-    <View style={{ marginTop: 24 }}>
-      <MethodDescription
-            headerText="재배 방법"
-            bodyText="햇볕이 잘 드는 곳에 심고, 흙은 물빠짐이 좋게 준비해요. 하루 1~2회, 겉흙이 마르면 충분히 물을 줘요.
-                      병충해 예방을 위해 통풍을 잘 시켜 주세요.
-                      심은 지 3~4주 후, 잎이 20cm쯤 되면 수확해요."
-       />
-    </View>
+          {/* 재배 방법 */}
+          <View style={{ marginTop: 24 }}>
+            <MethodDescription
+              headerText="재배 방법"
+              bodyText={result?.howTo || "재배 방법 정보를 불러오지 못했습니다."}
+            />
+          </View>
 
-       <View style={styles.buttonWrapper}>
-        <BtnLong
-          label="확인"
-          onPress={handleButtonPress} 
-           style={{
-            width: '100%',
-            height: 54,      
-            borderRadius: 4, 
-            backgroundColor: '#7EB85B',
-        }}
-        />
-      </View>
-
-
+          {/* 확인 버튼 */}
+          <View style={styles.buttonWrapper}>
+            <BtnLong
+              label="확인"
+              onPress={handleButtonPress}
+              style={{
+                width: "100%",
+                height: 54,
+                borderRadius: 4,
+                backgroundColor: "#7EB85B",
+              }}
+            />
+          </View>
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -112,23 +156,24 @@ const styles = StyleSheet.create({
   backButton: {
     width: 30,
     height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '500',
+    fontWeight: "500",
     color: colors.text,
-  },
-  resultText: {
-    fontSize: 16,
-    textAlign: "center",
-    marginVertical: 16,
   },
   buttonWrapper: {
     width: CONTENT_WIDTH,
     alignSelf: "center",
-    position: "absolute",   // 화면 기준 절대 위치
-    bottom: 20,    
+    position: "absolute",
+    bottom: 20,
+    marginBottom: 20,
+  },
+  cardWrapper: {
+    width: CONTENT_WIDTH,
+    alignSelf: "center",
+    marginTop: 24,
   },
 });

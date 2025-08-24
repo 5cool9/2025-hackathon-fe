@@ -1,35 +1,61 @@
 // components/BtnSaleStatus.tsx
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Animated, Easing,
+  View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Animated, Easing, ViewStyle,
 } from "react-native";
 import { colors, txt } from "../theme/tokens";
 import ArrowIcon from "../../assets/icon/arrow.svg";
 
-type SaleStatus = "판매중" | "판매완료";
+export type SaleStatus = "판매중" | "판매완료";
 
-export default function BtnSaleStatus() {
-  const [status, setStatus] = useState<SaleStatus>("판매중");
+type Props = {
+  /** 외부에서 상태를 제어하고 싶을 때 전달 (controlled) */
+  value?: SaleStatus;
+  /** 내부에서 상태를 관리하고 싶을 때 초기값 (uncontrolled) */
+  defaultValue?: SaleStatus;
+  /** 상태 변경 콜백 */
+  onChange?: (next: SaleStatus) => void;
+  /** false면 읽기 전용 뱃지처럼 동작(모달 안 열림) */
+  editable?: boolean;
+  /** 버튼 스타일 오버라이드 */
+  style?: ViewStyle;
+};
+
+export default function BtnSaleStatus({
+  value,
+  defaultValue = "판매중",
+  onChange,
+  editable = true,
+  style,
+}: Props) {
+  // 내부 상태(미제공 시만 사용)
+  const [inner, setInner] = useState<SaleStatus>(value ?? defaultValue);
+  const status: SaleStatus = (value ?? inner);
+
   const [isModalVisible, setIsModalVisible] = useState(false);
 
   // 애니메이션 값
   const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const sheetY = useRef(new Animated.Value(40)).current; // 아래에서 살짝 올라오게
+  const sheetY = useRef(new Animated.Value(40)).current;
+  const arrowRotate = useRef(new Animated.Value(0)).current; // 0~1 -> 0deg~180deg
+
+  // 외부 value가 바뀌면 내부도 동기화
+  useEffect(() => {
+    if (value !== undefined) setInner(value);
+  }, [value]);
 
   const open = () => {
+    if (!editable) return;
     setIsModalVisible(true);
     Animated.parallel([
       Animated.timing(overlayOpacity, {
-        toValue: 1,
-        duration: 180,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
+        toValue: 1, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true,
       }),
       Animated.timing(sheetY, {
-        toValue: 0,
-        duration: 220,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
+        toValue: 0, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: true,
+      }),
+      Animated.timing(arrowRotate, {
+        toValue: 1, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true,
       }),
     ]).start();
   };
@@ -37,48 +63,67 @@ export default function BtnSaleStatus() {
   const close = () => {
     Animated.parallel([
       Animated.timing(overlayOpacity, {
-        toValue: 0,
-        duration: 160,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
+        toValue: 0, duration: 160, easing: Easing.in(Easing.quad), useNativeDriver: true,
       }),
       Animated.timing(sheetY, {
-        toValue: 40,
-        duration: 200,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
+        toValue: 40, duration: 200, easing: Easing.in(Easing.quad), useNativeDriver: true,
+      }),
+      Animated.timing(arrowRotate, {
+        toValue: 0, duration: 180, easing: Easing.in(Easing.quad), useNativeDriver: true,
       }),
     ]).start(({ finished }) => finished && setIsModalVisible(false));
   };
 
-  const handleSelect = (newStatus: SaleStatus) => {
-    setStatus(newStatus);
+  const select = (next: SaleStatus) => {
+    // controlled: 외부로 알리고 닫기
+    onChange?.(next);
+    // uncontrolled: 내부 상태도 갱신
+    if (value === undefined) setInner(next);
     close();
+  };
+
+  const rotateStyle = {
+    transform: [
+      {
+        rotate: arrowRotate.interpolate({
+          inputRange: [0, 1],
+          outputRange: ["0deg", "180deg"],
+        }),
+      },
+    ],
   };
 
   return (
     <View>
-      <TouchableOpacity style={styles.button} onPress={open} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={[styles.button, !editable && styles.buttonReadonly, style]}
+        onPress={open}
+        activeOpacity={editable ? 0.8 : 1}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !editable }}
+      >
         <Text style={styles.buttonText}>{status}</Text>
-        <ArrowIcon width={12} height={12} stroke={colors.gray70} strokeWidth={2} style={{ marginLeft: 6 }} />
+        {editable && (
+          <Animated.View style={[{ marginLeft: 6 }, rotateStyle]}>
+            <ArrowIcon width={12} height={12} stroke={colors.gray70} strokeWidth={2} />
+          </Animated.View>
+        )}
       </TouchableOpacity>
 
       <Modal visible={isModalVisible} transparent animationType="none" onRequestClose={close}>
-        {/* overlay는 페이드만 */}
+        {/* overlay */}
         <Pressable style={StyleSheet.absoluteFill} onPress={close}>
           <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]} />
         </Pressable>
 
-        {/* 시트는 아래에서 슬라이드 */}
+        {/* bottom sheet */}
         <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetY }] }]}>
-            {/* === 그랩바 === */}
-        <View style={styles.grabber} />
-          <TouchableOpacity onPress={() => handleSelect("판매중")} style={styles.option}>
+          <View style={styles.grabber} />
+          <TouchableOpacity onPress={() => select("판매중")} style={styles.option}>
             <Text style={styles.optionText}>판매중</Text>
           </TouchableOpacity>
-          {/* === 구분선 === */}
-        <View style={styles.divider} />
-          <TouchableOpacity onPress={() => handleSelect("판매완료")} style={styles.option}>
+          <View style={styles.divider} />
+          <TouchableOpacity onPress={() => select("판매완료")} style={styles.option}>
             <Text style={styles.optionText}>판매완료</Text>
           </TouchableOpacity>
           <View style={styles.divider} />
@@ -106,51 +151,37 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.gray0,
   },
-  grabber: {
-    alignSelf: "center",
-    width: 36,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.gray20, // 밝은 회색
-    marginBottom: 12,
+  buttonReadonly: {
+    // 읽기 전용이면 드롭다운 느낌 줄이는 미묘한 스타일(선택)
+    opacity: 0.9,
   },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.gray20,  // tokens.ts의 gray20 근사
-  },
-
   buttonText: { ...txt.B1, color: colors.gray70 },
 
-  // overlay는 스크린 전체를 덮는 반투명 레이어 (위/아래 이동 없음)
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.3)",
   },
 
-  // 시트는 하단 고정 + 위로 슬라이드
   sheet: {
-    height:226,
+    height: 226,
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingTop: 18,               // 그랩바 위 여백
-    paddingBottom: 24,           // 홈 인디케이터 겹침 방지
+    left: 0, right: 0, bottom: 0,
+    paddingTop: 18,
+    paddingBottom: 24,
     backgroundColor: colors.gray0,
-    paddingVertical: 12,
     borderTopLeftRadius: SHEET_RADIUS,
     borderTopRightRadius: SHEET_RADIUS,
   },
-  option: {
-    paddingVertical: 14,
-    alignItems: "center",
+  grabber: {
+    alignSelf: "center",
+    width: 36,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.gray20,
+    marginBottom: 12,
   },
-  optionText: {
-    ...txt.B2,
-    color: colors.gray70,
-  },
-  optionText2: {
-    ...txt.B1,
-    color: colors.gray90,
-  },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.gray20 },
+  option: { paddingVertical: 14, alignItems: "center" },
+  optionText: { ...txt.B2, color: colors.gray70 },
+  optionText2: { ...txt.B1, color: colors.gray90 },
 });

@@ -1,7 +1,9 @@
-// components/ListSalesPd.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Image, Text, StyleSheet, ImageSourcePropType } from 'react-native';
-import { colors, spacing, radius, txt } from '../theme/tokens';
+import { colors, spacing, txt } from '../theme/tokens';
+
+// ✅ 기본 회색 이미지
+const PLACEHOLDER = require('../../assets/img/img_salesPd.png');
 
 type Props = {
   thumbnail?: ImageSourcePropType;
@@ -11,17 +13,20 @@ type Props = {
   soldOut?: boolean;
 };
 
-export default function ListSalesPd({
-  thumbnail,
-  name,
-  time,
-  price,
-  soldOut,
-}: Props) {
+export default function ListSalesPd({ thumbnail, name, time, price, soldOut }: Props) {
+  const [failed, setFailed] = useState(!thumbnail);
+
   return (
     <View style={s.card}>
       <View style={s.thumbBox}>
-        <Image source={thumbnail} style={s.thumb} />
+        {/* 썸네일 or 플레이스홀더 */}
+        <Image
+          source={failed ? PLACEHOLDER : (thumbnail as ImageSourcePropType)}
+          style={s.thumb}
+          resizeMode="cover"
+          onError={() => setFailed(true)}
+        />
+
         {soldOut && (
           <View style={s.overlay}>
             <Text style={s.overlayText}>판매{'\n'}완료</Text>
@@ -30,7 +35,7 @@ export default function ListSalesPd({
       </View>
 
       <View style={s.infoBox}>
-        <Text style={s.name}>{name}</Text>
+        <Text style={s.name} numberOfLines={1}>{name}</Text>
         <Text style={s.time}>{time}</Text>
         <Text style={s.price}>{price}</Text>
       </View>
@@ -42,17 +47,13 @@ const s = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,          // 16
+    padding: spacing.md,
     borderBottomWidth: 1,
-    borderColor: colors.border,   // tokens
-    backgroundColor: colors.bg,   // tokens
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
   },
   thumbBox: { position: 'relative' },
-  thumb: {
-    width: 70,
-    height: 70,
-    borderRadius: 4,      // 8 or 4 등 tokens 값
-  },
+  thumb: { width: 70, height: 70, borderRadius: 4 },
   overlay: {
     position: 'absolute',
     top: 0, left: 0,
@@ -63,26 +64,13 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   overlayText: {
-    ...txt.B1,                    // 14 / medium (읽기 좋은 굵기)
-    color: colors.gray0,          // #fff
+    ...txt.B1,
+    color: colors.gray0,
     textAlign: 'center',
-    lineHeight: 24,               // B3 기본이면 유지, 더 촘촘히 원하면 조정
+    lineHeight: 24,
   },
-  infoBox: {
-    marginLeft: spacing.md,       // 16
-    flex: 1,
-  },
-  // ▼ 텍스트 토큰 적용 (디자인 값에 맞춰 선택)
-  name: {
-    ...txt.B2,                    // 16 / medium
-    color: colors.gray40,         // #444444
-  },
-  time: {
-    ...txt.B4,                    // 12 / semibold
-    color: colors.gray25,         // #A2A2A2
-  },
-  price: {
-    ...txt.H5,                    // 18 / bold
-    color: colors.text,           // #222222
-  },
+  infoBox: { marginLeft: spacing.md, flex: 1 },
+  name: { ...txt.B2, color: colors.gray40 },
+  time: { ...txt.B4, color: colors.gray25 },
+  price: { ...txt.H5, color: colors.text },
 });

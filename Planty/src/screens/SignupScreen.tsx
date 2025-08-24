@@ -8,25 +8,55 @@ export default function SignUpScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
 
-  const handleSignUp = () => {
-    if (id && password && nickname) {
+
+  const handleSignUp = async () => {
+  if (!isFormValid) {
+    Alert.alert('입력 오류', '모든 필드를 입력해주세요.');
+    return;
+  }
+
+  try {
+    const response = await fetch('http://43.200.244.250/api/users/signup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: id,
+        password: password,
+        nickname: nickname,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (response.status === 201 || response.status === 200) {
+      // 회원가입 성공
       Alert.alert('회원가입 성공', '회원가입이 완료되었습니다.');
       navigation.navigate('Login');
+    } else {
+      // 서버에서 에러 메시지 내려줌
+      Alert.alert('회원가입 실패', data.message || '알 수 없는 오류가 발생했습니다.');
     }
-  };
+  } catch (error) {
+    console.error(error);
+    Alert.alert('네트워크 오류', '서버와 연결할 수 없습니다.');
+  }
+};
+
 
   
   const isFormValid = id && password && nickname;
 
   // 아이디 입력
 const handleIdChange = (text: string) => {
-  const englishOnly = text.replace(/[^a-zA-Z]/g, ''); // 영어 알파벳만 남김
+  const englishOnly = text.replace(/[^a-zA-Z0-9]/g, '');
   setId(englishOnly);
 };
 
 // 비밀번호 입력
 const handlePasswordChange = (text: string) => {
-  const englishOnly = text.replace(/[^a-zA-Z]/g, '');
+  const englishOnly = text.replace(/[^a-zA-Z0-9]/g, '');
   setPassword(englishOnly);
 };
 
@@ -94,6 +124,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
+    marginTop:40,
     marginBottom: 40,
     textAlign: 'left',
   },
@@ -112,5 +143,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 54,
     borderRadius: 4,
+    marginBottom:40,
   },
 });

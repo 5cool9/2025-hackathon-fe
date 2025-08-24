@@ -1,8 +1,7 @@
-import { Pressable, View, Image, StyleSheet, Text, ImageSourcePropType, Dimensions } from 'react-native';
+// components/ListPlantInfo.tsx
+import { Pressable, View, Image, StyleSheet, Text, ImageSourcePropType } from 'react-native';
 import { colors, spacing, radius, txt } from '../theme/tokens';
 const PlantPNG = require('../../assets/img/img_plant.png');
-
-const screenWidth = Dimensions.get('window').width; // 화면 전체 폭
 
 type Props = {
   thumbnail?: string | ImageSourcePropType;
@@ -16,10 +15,10 @@ type Props = {
   envPlace?: string;
   temp?: string;
   height?: string;
-  mode?: 'schedule' | 'environment';
+  mode?: 'schedule' | 'environment'; // 기본값 schedule
 };
 
-export default function CardPlantInfo({
+export default function ListPlantInfo({
   thumbnail,
   name,
   sowingDate,
@@ -31,7 +30,7 @@ export default function CardPlantInfo({
   envPlace,
   temp,
   height,
-  mode = 'schedule',
+  mode = 'schedule', // 기본값
 }: Props) {
   const src: ImageSourcePropType =
     typeof thumbnail === 'string'
@@ -39,25 +38,24 @@ export default function CardPlantInfo({
       : thumbnail ?? PlantPNG;
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={[s.card, active && s.active, { width: screenWidth * 0.9 }]} // 화면 90%
-    >
+    <Pressable onPress={onPress} style={[s.card, active && s.active]}>
+      {/* 썸네일 */}
       <Image source={src} style={s.thumb} />
 
-      <View style={s.text_box}>
+      {/* 텍스트 영역 */}
+      <View style={s.textBox}>
         <Text style={s.title}>{name}</Text>
 
         {mode === 'schedule' && (
-          <View style={s.meta_box}>
+          <View style={s.metaBox}>
             {!!sowingDate && (
-              <View style={s.meta_row}>
+              <View style={s.metaRow}>
                 <Text style={s.label}>재배 시작일</Text>
                 <Text style={s.value}>{sowingDate}</Text>
               </View>
             )}
             {!!harvestDate && (
-              <View style={s.meta_row}>
+              <View style={s.metaRow}>
                 <Text style={s.label}>{planned ? '수확 예정일' : '수확일'}</Text>
                 <Text style={s.value}>
                   {harvestDate}
@@ -69,21 +67,21 @@ export default function CardPlantInfo({
         )}
 
         {mode === 'environment' && (
-          <View style={s.meta_box}>
+          <View style={s.metaBox}>
             {!!envPlace && (
-              <View style={s.meta_row}>
+              <View style={s.metaRow}>
                 <Text style={s.label}>환경</Text>
                 <Text style={s.value}>{envPlace}</Text>
               </View>
             )}
             {!!temp && (
-              <View style={s.meta_row}>
+              <View style={s.metaRow}>
                 <Text style={s.label}>기온</Text>
                 <Text style={s.value}>{temp}</Text>
               </View>
             )}
             {!!height && (
-              <View style={s.meta_row}>
+              <View style={s.metaRow}>
                 <Text style={s.label}>높이</Text>
                 <Text style={s.value}>{height}</Text>
               </View>
@@ -99,14 +97,12 @@ const s = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
+    gap: spacing.md, // 12
+    padding: spacing.md, // 12
+    borderRadius: radius.md, // 8
     backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: colors.border,
-    flex: 0,
-    alignSelf: 'center', // 중앙 정렬
   },
   active: {
     borderColor: colors.primary,
@@ -115,16 +111,16 @@ const s = StyleSheet.create({
   thumb: {
     width: 120,
     height: 120,
-    borderRadius: radius.sm,
+    borderRadius: radius.sm, // 4
     backgroundColor: colors.gray10,
   },
-  text_box: {
+  textBox: {
     flex: 1,
     height: 120,
     flexDirection: 'column',
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
-    gap: spacing.sm,
+    gap: spacing.sm, // 8
   },
   title: {
     color: '#444',
@@ -132,11 +128,11 @@ const s = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 30,
   },
-  meta_box: {
+  metaBox: {
     flexDirection: 'column',
     gap: 4,
   },
-  meta_row: {
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 7,
@@ -155,4 +151,3 @@ const s = StyleSheet.create({
     lineHeight: 24,
   },
 });
-

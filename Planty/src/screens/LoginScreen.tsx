@@ -3,22 +3,60 @@ import { View, StyleSheet, Alert, Text, TouchableOpacity } from 'react-native';
 import Logo from '../../assets/img/img_logo.svg';
 import Input from '../components/Input';
 import BtnLong from '../components/BtnLong';
+import axios from 'axios';
+import { setAccessToken } from '../utils/token';
 
 export default function LoginScreen({ navigation }: any) {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   
-  const handleLogin = () => {
-  if (id && password) {
-    // 팝업 없이 바로 AppStack으로 이동
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'AppStack' }],
-    });
-  } else {
+  const handleLogin = async () => {
+  if (!id || !password) {
     Alert.alert('로그인 실패', '아이디와 비밀번호를 입력해주세요.');
+    return;
+  }
+
+  try {
+    const response = await axios.post(
+      'http://43.200.244.250/api/users/login',
+      { userId: id, password: password },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+
+    // 헤더에서 accessToken 가져오기
+    const token = response.headers['authorization']?.split(' ')[1];
+    if (!token) {
+      Alert.alert('로그인 실패', '토큰이 없습니다.');
+      return;
+    }
+
+    setAccessToken(token); // 전역 변수에 저장
+
+    // 로그인 성공 시 AppStack으로 이동
+    navigation.reset({ index: 0, routes: [{ name: 'AppStack' }] });
+    
+
+  } catch (error: any) {
+    const status = error.response?.status;
+    const data = error.response?.data;
+
+    if (!status || !data) {
+      Alert.alert('로그인 실패', '알 수 없는 오류가 발생했습니다.');
+      return;
+    }
+
+    if (status === 401 && data.code === 'INVALID_CREDENTIALS') {
+      Alert.alert('로그인 실패', '아이디 또는 비밀번호가 올바르지 않습니다.');
+    } else if (status === 400 && data.code === 'INVALID_JSON') {
+      Alert.alert('로그인 실패', '요청 형식이 올바르지 않습니다.');
+    } else if (status === 405 && data.code === 'METHOD_NOT_ALLOWED') {
+      Alert.alert('로그인 실패', '지원하지 않는 요청입니다.');
+    } else {
+      Alert.alert('로그인 실패', data.message || '알 수 없는 오류');
+    }
   }
 };
+
 
   return (
     <View style={styles.container}>
@@ -67,7 +105,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff' 
   },
   logoContainer: {
-    marginTop: 126, 
+    marginTop: 186, 
     alignItems: 'center', 
   },
   form: {

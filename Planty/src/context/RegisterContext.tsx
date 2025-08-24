@@ -1,54 +1,80 @@
-import React, { useContext, createContext, useState, ReactNode } from 'react';
+// src/context/RegisterContext.tsx
+import React, { useContext, createContext, useState, ReactNode, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
+import { getAccessToken } from '../utils/token'; // accessToken 가져오기
 
-// Register 데이터 타입 정의
+
 export type UserRegisterData = {
-  id: string; 
+  id: string;
   name: string;
-  startDate: string;
-  endDate: string;
-  image: string;
-  analysisResult?: string; // Analyze 결과
+  image?: string;          // cropImg 변환
+  startDate?: string;      // startAt 변환
+  endDate?: string;        // endAt 변환
+  analysisResult?: string;
   badgeText?: string;
 };
 
-// Context 타입
-type RegisterContextType = {
+
+export type RegisterContextType = {
   userData: UserRegisterData[];
-  tempData: Partial<UserRegisterData>;      // 임시 저장용
+  setUserData: React.Dispatch<React.SetStateAction<UserRegisterData[]>>;
+  tempData: Partial<UserRegisterData>;
   saveTempData: (data: Partial<UserRegisterData>) => void;
-  finalizeData: (data?: Partial<UserRegisterData>) => void; // 최종 저장
-  addUserData: (data: UserRegisterData) => void; 
+  finalizeData: (data?: Partial<UserRegisterData>) => void;
+  addUserData: (data: UserRegisterData) => void;
   deleteUserData: (name: string) => void;
 };
 
-// Context 생성
 export const RegisterContext = createContext<RegisterContextType | null>(null);
 
-// Provider 컴포넌트
 export const RegisterProvider = ({ children }: { children: ReactNode }) => {
   const [userData, setUserData] = useState<UserRegisterData[]>([]);
   const [tempData, setTempData] = useState<Partial<UserRegisterData>>({});
 
-  // 임시 저장
+  // 앱 시작 시 서버에서 데이터 fetch
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const token = getAccessToken();
+        if (!token) return;
+
+        const response = await axios.get('http://43.200.244.250/api/crop', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.data.success && Array.isArray(response.data.data)) {
+          // 서버 데이터 포맷에 맞춰 변환
+          const crops: UserRegisterData[] = response.data.data.map((c: any) => ({
+            id: c.id.toString(),
+            name: c.name,
+            startDate: c.startAt,
+            endDate: c.endAt,
+            image: c.image ?? '',
+            analysisResult: c.analysisResult ?? '',
+          }));
+          setUserData(crops);
+        }
+      } catch (error) {
+        console.log('Fetch UserData Error:', error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
   const saveTempData = (data: Partial<UserRegisterData>) => {
     setTempData(prev => ({ ...prev, ...data }));
   };
 
-  // 최종 저장: data가 있으면 업데이트/추가, 없으면 tempData 사용
   const finalizeData = (data?: Partial<UserRegisterData>) => {
     const finalData = data ?? tempData;
-
     if (!finalData.name || !finalData.image) return;
 
-    setUserData((prev: UserRegisterData[]) => {
+    setUserData(prev => {
       if (finalData.id) {
-        // 수정
-        return prev.map((item: UserRegisterData) =>
-          item.id === finalData.id ? { ...item, ...finalData } as UserRegisterData : item
-        );
+        return prev.map(item => (item.id === finalData.id ? { ...item, ...finalData } as UserRegisterData : item));
       }
-      // 새 등록
       return [...prev, { ...finalData, id: uuidv4() } as UserRegisterData];
     });
 
@@ -65,14 +91,13 @@ export const RegisterProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <RegisterContext.Provider
-      value={{ userData, tempData, saveTempData, finalizeData, addUserData, deleteUserData }}
+      value={{ userData, setUserData, tempData, saveTempData, finalizeData, addUserData, deleteUserData }}
     >
       {children}
     </RegisterContext.Provider>
   );
 };
 
-// 훅
 export const useRegister = () => {
   const context = useContext(RegisterContext);
   if (!context) throw new Error('useRegister must be used within RegisterProvider');

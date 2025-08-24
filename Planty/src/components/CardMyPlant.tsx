@@ -10,21 +10,26 @@ import {
 } from 'react-native';
 import { colors, spacing, radius, txt } from '../theme/tokens';
 
-type Props = {
-  thumbnail?: ImageSourcePropType; // require(...) 또는 { uri }
-  name: string;                    // 아래 타이틀
-  badgeText?: string;              // 예: "25년 8월 중순"
-  size?: number;                   // 정사각형 한 변 (기본 169)
+export type CardMyPlantProps = {
+  name: string;
+  thumbnail?: { uri: string };
+  badgeText?: string;
+  sowingDate?: string;
+  harvestDate?: string;
+  size?: number; 
   onPress?: () => void;
 };
 
+
 export default function CardMyPlant({
-  thumbnail,
   name,
-  badgeText = '25년 8월 중순',
-  size = 169,
+  thumbnail,
+  badgeText,
+  sowingDate,
+  harvestDate,
   onPress,
-}: Props) {
+  size = 169,
+}: CardMyPlantProps) {
   return (
     <Pressable style={[s.wrap, { width: size }]} onPress={onPress}>
       {/* 썸네일 박스 */}
@@ -59,7 +64,6 @@ const s = StyleSheet.create({
   wrap: {
     alignItems: 'center',
     gap: spacing.sm, // 8
-    marginBottom: spacing.lg,
   },
   tile: {
     overflow: 'hidden',

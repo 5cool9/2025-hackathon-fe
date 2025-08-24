@@ -1,65 +1,115 @@
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+// src/screens/HomeScreen.tsx
 import React, { useState } from 'react';
-import { StyleSheet, View, SafeAreaView, Image, TouchableOpacity, Text, Dimensions, ScrollView } from 'react-native';
+import {
+  SafeAreaView,
+  StyleSheet,
+  View,
+  Image,
+  Text,
+  TouchableOpacity,
+  Dimensions,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import type { CompositeNavigationProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import axios from 'axios';
+
 import BtnLong from '../components/BtnLong';
-import CardMyPlant from '../components/CardMyPlant'; // CardMyPlant 컴포넌트 임포트
-import { colors, fontSize, fontWeight, spacing as SP } from '../theme/tokens';
+import CardMyPlant from '../components/CardMyPlant';
+import { colors, spacing as SP } from '../theme/tokens';
+
 import Plusicon from '../../assets/icon/icon_plus.svg';
-import { RootStackParamList } from '../navigation/types';
 import Logo from '../../assets/img/img_logo.svg';
-import { useRegister } from '../context/RegisterContext';
+import { getAccessToken } from '../utils/token';
+import type { RootStackParamList, HomeStackParamList } from '../navigation/types';
 
-type UserRegisterData = {
-  name: string;
-  image?: string;
-  badgeText?: string;
-  sowingDate?: string;
-  harvestDate?: string;
-  harvestDateEnd?: string; 
-};
-
-
+type HomeNav = CompositeNavigationProp<
+  NativeStackNavigationProp<HomeStackParamList, 'HomeMain'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
-
-type PlantData = {
-  name: string;
-  image?: string;
-};
-
 export default function HomeScreen() {
-  const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { userData } = useRegister();
-  if (!userData) return null;
+  const navigation = useNavigation<HomeNav>();
+  const [plantList, setPlantList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  
-  // Context에 값이 있으면 배열로 만들어서 map 돌리기
-  const plantList = userData;
+  /** ✅ 사용자 등록 작물 가져오기 */
+  const fetchUserCrops = async () => {
+    try {
+      setLoading(true);
+      const token = await getAccessToken();
+      if (!token) {
+        Alert.alert("오류", "로그인 토큰이 없습니다.");
+        setLoading(false);
+        return;
+      }
+
+      const response = await axios.get('http://43.200.244.250/api/diary/crops', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (Array.isArray(response.data)) {
+        const normalizedList = response.data.map((item: any) => {
+          let imageUri: string | undefined = undefined;
+          if (item.cropImg) {
+            if (item.cropImg.startsWith('http') || item.cropImg.startsWith('file://')) {
+              imageUri = item.cropImg;
+            } else {
+              // DB 경로에서 /srv/app/app 제거 후 서버 URL 붙이기
+              imageUri = `http://43.200.244.250${item.cropImg.replace('/srv/app/app', '')}`;
+            }
+          }
+          return { ...item, cropImg: imageUri };
+        });
+
+        console.log('Fetched plantList:', normalizedList);
+        setPlantList(normalizedList);
+      } else {
+        setPlantList([]);
+      }
+    } catch (error: any) {
+      console.log("Fetch Crops Error:", error.response || error);
+      Alert.alert("오류", error.response?.data?.message || "작물 정보를 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** ✅ 로컬에서 삭제 처리 */
+  const deleteUserData = (id: string) => {
+    setPlantList(prev => prev.filter(item => item.id !== id));
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserCrops();
+    }, [])
+  );
+
   return (
     <SafeAreaView style={styles.safe}>
-      {/* 상단 종 아이콘 */}
       <View style={styles.header}>
         <Logo width={109} height={30} />
-        <TouchableOpacity onPress={() => console.log('알림 아이콘 클릭')}>
+        <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
           <Image
-            source={require('../../assets/icon/bellOff.png')} 
+            source={require('../../assets/icon/bellOff.png')}
             style={styles.bellIcon}
             resizeMode="contain"
           />
         </TouchableOpacity>
       </View>
 
-      {/* 배너 이미지 */}
       <Image
-        source={require('../../assets/img/banner.png')} 
+        source={require('../../assets/img/banner.png')}
         style={styles.banner}
         resizeMode="cover"
       />
 
-      {/* 배너 아래: 좌측 텍스트 / 우측 아이콘 */}
       <View style={styles.row}>
         <Text style={styles.title}>재배중인 작물</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Register')}>
@@ -67,8 +117,12 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 등록된 작물 유무에 따른 조건부 렌더링 */}
-      {plantList.length === 0 ? (
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 }}>
+          <ActivityIndicator size="large" color="#7EB85B" />
+          <Text style={{ marginTop: 12 }}>작물 정보를 불러오는 중...</Text>
+        </View>
+      ) : plantList.length === 0 ? (
         <>
           <View style={styles.contentContainer}>
             <Text style={styles.content}>등록된 작물이 없어요</Text>
@@ -76,12 +130,12 @@ export default function HomeScreen() {
           </View>
 
           <Image
-            source={require('../../assets/img/img_farmer.png')} 
+            source={require('../../assets/img/img_farmer.png')}
             style={styles.middleImage}
             resizeMode="cover"
           />
 
-          <View style={styles.container}>
+          <View style={styles.center}>
             <BtnLong
               label="작물 등록하기"
               onPress={() => navigation.navigate('Register')}
@@ -93,13 +147,27 @@ export default function HomeScreen() {
         </>
       ) : (
         <ScrollView contentContainerStyle={styles.plantList}>
-          {plantList.map((item, index) => (
+          {plantList.map((item: any, idx: number) => (
             <CardMyPlant
-              key={index}
-              name={item.name}
-              thumbnail={item.image ? { uri: item.image } : undefined} 
-              badgeText={item.badgeText}
-              onPress={() => navigation.navigate('PlantDetail', { plantData: item })}
+              key={idx}
+              name={item.name ?? '이름 없음'}
+              badgeText={item.badgeText ?? ''}
+              sowingDate={item.startAt}
+              harvestDate={item.endAt}
+              thumbnail={item.cropImg ? { uri: item.cropImg } : undefined}
+              onPress={() =>
+                navigation.navigate('PlantDetail', {
+                  plantData: {
+                    id: item.id,
+                    name: item.name,
+                    image: item.cropImg ?? undefined,
+                    cropImg: item.cropImg ?? undefined,
+                    startAt: item.plantingDate, 
+                    endAt: item.endDate ?? item.harvestDateEnd,
+                    badgeText: item.badgeText ?? '',
+                  },
+                })
+              }
             />
           ))}
         </ScrollView>
@@ -109,72 +177,22 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
+  safe: { flex: 1, backgroundColor: colors.bg },
   header: {
     width: SCREEN_WIDTH * 0.9,
-    flexDirection: 'row',        
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',      
+    alignItems: 'center',
     marginTop: 18,
     alignSelf: 'center',
-    paddingHorizontal: 0,
   },
-  bellIcon: {
-    width: 30,
-    height: 30,
-  },
-  banner: {
-    width: SCREEN_WIDTH * 0.9, 
-    height: (SCREEN_WIDTH * 0.9) * 0.3, 
-    alignSelf: 'center',
-    marginTop: 12,
-  },
-  row: {
-    width: SCREEN_WIDTH * 0.9,
-    flexDirection: 'row',
-    justifyContent: 'space-between', 
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginTop: 50,
-    marginBottom: SP.md,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    fontFamily: 'regular',
-    color: colors.text,
-  },
-  contentContainer: {
-    justifyContent: 'center', 
-    alignItems: 'center',    
-    marginTop: 62,
-  },
-  content: {
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'regular',
-    color: '#A2A2A2',
-    lineHeight: 24,
-  },
-  middleImage: {
-    width: SCREEN_WIDTH * 0.5, 
-    height: (SCREEN_WIDTH * 0.5) * 0.68, 
-    alignSelf: 'center',
-    marginBottom: 16,
-    marginTop: 16,
-  },
-  container: {
-    alignItems: 'center',
-    marginTop: SP.md,
-  },
-  plantList: {
-    paddingHorizontal: 30,
-    paddingBottom: SP.lg,
-    flexDirection: 'row',    // 가로 방향
-    flexWrap: 'wrap',        // 줄바꿈 허용
-    justifyContent: 'space-between', // 카드 사이 간격
-  },
+  bellIcon: { width: 30, height: 30 },
+  banner: { width: SCREEN_WIDTH * 0.9, height: (SCREEN_WIDTH * 0.9) * 0.3, alignSelf: 'center', marginTop: 12 },
+  row: { width: SCREEN_WIDTH * 0.9, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'center', marginTop: 50, marginBottom: SP.md },
+  title: { fontSize: 24, fontWeight: '700', color: colors.text },
+  contentContainer: { justifyContent: 'center', alignItems: 'center', marginTop: 62 },
+  content: { fontSize: 16, fontWeight: '600', color: '#A2A2A2', lineHeight: 24 },
+  middleImage: { width: SCREEN_WIDTH * 0.5, height: (SCREEN_WIDTH * 0.5) * 0.68, alignSelf: 'center', marginBottom: 16, marginTop: 16 },
+  center: { alignItems: 'center', marginTop: SP.md },
+  plantList: { paddingHorizontal: 20, paddingBottom: SP.lg, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
 });

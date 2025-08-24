@@ -51,5 +51,3 @@ const styles = StyleSheet.create({
     color: colors.text, // 기본 본문색
   },
 });
-
-

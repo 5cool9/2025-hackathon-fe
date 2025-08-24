@@ -1,6 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Image, Animated, Dimensions, StyleSheet, SafeAreaView, Text, TouchableOpacity } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import {
+  View,
+  Image,
+  Animated,
+  Dimensions,
+  StyleSheet,
+  SafeAreaView,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Arrowicon from '../../assets/icon/icon_arrowLeft.svg';
 import CornerSVG from '../../assets/icon/corner.svg';
@@ -9,40 +18,73 @@ import { colors } from '../theme/tokens';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type RootStackParamList = {
-  AnalyzeScreen: { image: string };
-  ResultScreen: { image: string; result: string };
+  AnalyzeScreen: {
+    image: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+    tempCropId: number;
+    analysisResult?: any;
+  };
+  ResultScreen: {
+    image: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+    tempCropId: number;
+    analysisResult?: any;
+  };
 };
 
+type AnalyzeScreenRouteProp = RouteProp<RootStackParamList, 'AnalyzeScreen'>;
 type AnalyzeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'AnalyzeScreen'>;
 
 export default function AnalyzeScreen() {
-  const route = useRoute<any>();
+  const route = useRoute<AnalyzeScreenRouteProp>();
   const navigation = useNavigation<AnalyzeScreenNavigationProp>();
-  const imageUri = route.params.image;
+  const { image, name, startDate, endDate, tempCropId, analysisResult } = route.params;
 
   const [analyzing, setAnalyzing] = useState(true);
   const translateY = useRef(new Animated.Value(0)).current;
 
   const RECT_WIDTH = 358;
   const RECT_HEIGHT = 443;
-  const BAR_HEIGHT = 120; // 이동하는 바 높이
+  const BAR_HEIGHT = 120;
 
   useEffect(() => {
-    // 세로 이동 애니메이션
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
-        Animated.timing(translateY, { toValue: RECT_HEIGHT - BAR_HEIGHT, duration: 1500, useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: 0, duration: 1500, useNativeDriver: true }),
+        Animated.timing(translateY, {
+          toValue: RECT_HEIGHT - BAR_HEIGHT,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
       ])
-    ).start();
+    );
+    animation.start();
 
     const timer = setTimeout(() => {
       setAnalyzing(false);
-      navigation.replace('ResultScreen', { image: imageUri, result: 'AI 분석 완료!' });
+      navigation.replace('ResultScreen', {
+        image,
+        name,
+        startDate,
+        endDate,
+        tempCropId,
+        analysisResult,
+      });
     }, 3000);
 
-    return () => clearTimeout(timer);
-  }, []);
+    return () => {
+      animation.stop();
+      clearTimeout(timer);
+    };
+  }, [translateY, navigation, image, name, startDate, endDate, tempCropId, analysisResult]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -55,17 +97,14 @@ export default function AnalyzeScreen() {
       </View>
 
       <View style={styles.container}>
-        <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
+        <Image source={{ uri: image }} style={styles.image} resizeMode="cover" />
 
-        {/* 사각형 영역 */}
         <View style={[styles.rectContainer, { width: RECT_WIDTH, height: RECT_HEIGHT, top: 100 }]}>
-          {/* 사각형 모서리 SVG */}
           <CornerSVG style={[styles.corner, { top: 0, left: 0 }]} />
-          <CornerSVG style={[styles.corner, { top: 0, right: 0,  transform: [{ scaleX: -1 }] }]} />
+          <CornerSVG style={[styles.corner, { top: 0, right: 0, transform: [{ scaleX: -1 }] }]} />
           <CornerSVG style={[styles.corner, { bottom: 0, left: 0, transform: [{ scaleX: -1 }, { rotate: '-180deg' }] }]} />
           <CornerSVG style={[styles.corner, { bottom: 0, right: 0, transform: [{ rotate: '180deg' }] }]} />
 
-          {/* 이동하는 투명 바 */}
           {analyzing && (
             <Animated.View
               style={[
@@ -74,15 +113,16 @@ export default function AnalyzeScreen() {
               ]}
             />
           )}
+
           <View style={styles.smallBox}>
             <Text style={{ color: 'white' }}>작물을 인식중이에요</Text>
           </View>
-
         </View>
       </View>
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#000' },

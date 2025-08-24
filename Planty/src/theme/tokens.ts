@@ -22,7 +22,7 @@ export const colors = {
   text: '#222222',
   subText: '#888888',
   border: '#e6e6e6',
-  bg: '#fff',
+  bg: '#ffffff',
 };
 
 // === Spacing / Radius (원하면 수정) ===
