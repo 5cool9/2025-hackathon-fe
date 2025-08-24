@@ -37,7 +37,7 @@ yarn-error.*
 *.tsbuildinfo
 
 /git
-week1/
-week2/
-week3/
+Week1/
+Week2/
+Week3/
 .git/
