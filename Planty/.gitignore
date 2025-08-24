@@ -35,3 +35,9 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+/git
+week1/
+week2/
+week3/
+.git/
