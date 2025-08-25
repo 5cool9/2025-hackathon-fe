@@ -40,7 +40,7 @@ type AiMsg = {
   sender: 'user' | 'ai';
   createdAt: string;
   aiImage?: string | null;
-  recommendedBoards?: any[] | null;
+  recommendedBoards?: any;
 };
 
 type GetChatRes = { id: number; createdAt: string; messages: AiMsg[] };
@@ -48,6 +48,36 @@ type SendRes = { userMessage: AiMsg; aiMessage: AiMsg };
 
 const STORAGE_KEY = 'aiChatId';
 const makeTempId = () => -Math.floor(Date.now() + Math.random() * 1000);
+
+function toQuickLabels(input: any): string[] | undefined {
+  if (!input) return undefined;
+  if (Array.isArray(input)) {
+    const labels = input
+      .map((v) => (typeof v === 'string' ? v : (v?.title ?? v?.name ?? v?.label ?? null)))
+      .filter((s): s is string => !!s && typeof s === 'string')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return labels.length ? labels : undefined;
+  }
+  if (typeof input === 'string') {
+    let s = input.trim();
+    try {
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) {
+        const labels = parsed.map((x) => (typeof x === 'string' ? x.trim() : null)).filter(Boolean) as string[];
+        if (labels.length) return labels;
+      }
+    } catch {}
+    if (s.startsWith('[') && s.endsWith(']')) s = s.slice(1, -1);
+    const labels = s.split(',').map((p) => p.replace(/^['"\s]+|['"\s]+$/g, '').trim()).filter(Boolean);
+    return labels.length ? labels : undefined;
+  }
+  if (typeof input === 'object') {
+    const maybe = (input as any)?.title ?? (input as any)?.name ?? (input as any)?.label;
+    if (typeof maybe === 'string' && maybe.trim()) return [maybe.trim()];
+  }
+  return undefined;
+}
 
 export default function AIChatScreen() {
   const nav = useNavigation<any>();
@@ -78,24 +108,18 @@ export default function AIChatScreen() {
     role: m.sender === 'ai' ? 'ai' : 'user',
     text: m.content,
     time: nowK(m.createdAt),
-    quick: Array.isArray(m.recommendedBoards) && m.recommendedBoards.length
-      ? m.recommendedBoards.map((b: any) => b?.title ?? '열람하기')
-      : undefined,
+    quick: toQuickLabels(m.recommendedBoards),
   });
 
   const loadChat = useCallback(async (id: number) => {
     if (!Number.isFinite(id) || id <= 0) throw new Error('Invalid chatId for GET');
-    const { data } = await api.get<GetChatRes>(`/api/aichat/${id}`, {
-      headers: await authHeaders(),
-    });
+    const { data } = await api.get<GetChatRes>(`/api/aichat/${id}`, { headers: await authHeaders() });
     setChatId(data.id);
     setMsgs(data.messages.map(aiToUi));
   }, []);
 
   const startChat = useCallback(async () => {
-    const { data } = await api.post(`/api/aichat/start`, null, {
-      headers: await authHeaders(),
-    });
+    const { data } = await api.post(`/api/aichat/start`, null, { headers: await authHeaders() });
     const id = Number(data?.id ?? data?.aiChat?.id);
     if (!Number.isFinite(id) || id <= 0) throw new Error('Invalid aiChat start response');
     setChatId(id);
@@ -107,24 +131,18 @@ export default function AIChatScreen() {
     (async () => {
       try {
         setLoading(true);
-
-        // 1) 네비 파라미터 우선
         if (typeof passedChatId === 'number' && Number.isFinite(passedChatId) && passedChatId > 0) {
           setChatId(passedChatId);
           await AsyncStorage.setItem(STORAGE_KEY, String(passedChatId));
           await loadChat(passedChatId);
           return;
         }
-
-        // 2) 저장된 값
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         const sid = Number(stored);
         if (Number.isFinite(sid) && sid > 0) {
           await loadChat(sid);
           return;
         }
-
-        // 3) 잘못 저장된 값 제거 후 새로 생성
         if (stored && !Number.isFinite(sid)) await AsyncStorage.removeItem(STORAGE_KEY);
         const newId = await startChat();
         await loadChat(newId);
@@ -137,8 +155,12 @@ export default function AIChatScreen() {
     })();
   }, [passedChatId, loadChat, startChat]);
 
+  // ✅ 태그 → 판매탭 검색 이동 + 강제 리로드 신호
   const goToSellSearch = (label: string) => {
-    nav.getParent()?.navigate('Sell', { screen: 'SellList', params: { q: label } });
+    nav.getParent()?.navigate('Sell', {
+      screen: 'SellList',
+      params: { q: label, refreshAt: Date.now() },
+    });
   };
 
   const handleSendText = async (text: string) => {
@@ -147,39 +169,34 @@ export default function AIChatScreen() {
 
     const tempId = makeTempId();
     const optimistic: Msg = { id: tempId, role: 'user', text, time: nowK() };
-    setMsgs(prev => [...prev, optimistic]);
+    setMsgs((prev) => [...prev, optimistic]);
 
     try {
-      const { data } = await api.post<SendRes>(
-        `/api/aichat/${chatId}/send`,
-        null,
-        { params: { content: text }, headers: await authHeaders() },
-      );
+      const { data } = await api.post<SendRes>(`/api/aichat/${chatId}/send`, null, {
+        params: { content: text },
+        headers: await authHeaders(),
+      });
 
-      setMsgs(prev => {
-        const patched = prev.map(m =>
-          m.id === tempId
-            ? { ...m, id: data.userMessage.id, time: nowK(data.userMessage.createdAt) }
-            : m,
+      setMsgs((prev) => {
+        const patched = prev.map((m) =>
+          m.id === tempId ? { ...m, id: data.userMessage.id, time: nowK(data.userMessage.createdAt) } : m,
         );
         return [...patched, aiToUi(data.aiMessage)];
       });
     } catch (err: any) {
       console.warn(err);
-      setMsgs(prev => [
-        ...prev.filter(m => m.id !== tempId),
+      setMsgs((prev) => [
+        ...prev.filter((m) => m.id !== tempId),
         { id: makeTempId(), role: 'ai', text: '전송에 실패했어요. 잠시 후 다시 시도해 주세요.', time: nowK() },
       ]);
-      if (err?.response?.status === 401) {
-        Alert.alert('인증 필요', '로그인이 필요합니다.');
-      }
+      if (err?.response?.status === 401) Alert.alert('인증 필요', '로그인이 필요합니다.');
     } finally {
       sendingRef.current = false;
     }
   };
 
   const handleSendImage = (uri: string) => {
-    setMsgs(prev => [
+    setMsgs((prev) => [
       ...prev,
       { id: makeTempId(), role: 'user', imageUri: uri, time: nowK() },
       { id: makeTempId(), role: 'ai', text: '이미지는 현재 텍스트 분석만 지원해요 🙇‍♀️', time: nowK() },

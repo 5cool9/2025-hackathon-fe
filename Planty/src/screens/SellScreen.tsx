@@ -58,18 +58,22 @@ export default function SellScreen() {
   const route = useRoute<Rt>();
   const refreshAt = (route.params as any)?.refreshAt;
 
+  // 🔒 최신 요청만 반영하도록 가드
+  const reqSeqRef = useRef(0);
+
   useEffect(() => {
     const keyword = route.params?.q;
     if (typeof keyword === 'string' && keyword.length > 0) {
       setQ(keyword);
       setSearching(true);
+      // 즉시 로드 시도 (상태 반영 기다리지 않음) + 가드로 경합 방지
+      load(keyword);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [route.params?.q]);
 
   const mapToRow = (x: any): Row => {
     const b = x?.board ?? x;
-
     const rawThumb =
       b.thumbnailUrl ??
       b.thumbnailImg ??
@@ -79,7 +83,6 @@ export default function SellScreen() {
       (Array.isArray(b.images) ? b.images[0] : undefined) ??
       (Array.isArray(x.images) ? x.images[0] : undefined) ??
       x.image;
-
     return {
       id: String(b.id ?? b.boardId),
       title: b.title ?? '',
@@ -90,34 +93,43 @@ export default function SellScreen() {
     };
   };
 
-  const load = useCallback(async () => {
+  // ✅ query를 인자로 받는 로더 + 시퀀스 가드
+  const load = useCallback(async (query: string) => {
+    const my = ++reqSeqRef.current;
     try {
-      if (q.trim()) {
-        const { data } = await api.get('/api/board/search', { params: { q: q.trim(), page: 0, size: 20 } });
+      if (query.trim()) {
+        const { data } = await api.get('/api/board/search', {
+          params: { q: query.trim(), page: 0, size: 20 },
+        });
+        if (my !== reqSeqRef.current) return; // stale 응답 무시
         setRows(pickItems(data).map(mapToRow));
       } else {
         const { data } = await api.get('/api/board', { params: { page: 0, size: 20 } });
+        if (my !== reqSeqRef.current) return;
         setRows(pickItems(data).map(mapToRow));
       }
     } catch {
+      if (my !== reqSeqRef.current) return;
       setRows([]);
     }
-  }, [q]);
+  }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // q가 바뀔 때마다 최신 q로 로드
+  useEffect(() => { load(q); }, [q, load]);
 
+  // 외부 refreshAt 신호 시에도 현재 q로 재조회
   useEffect(() => {
     if (typeof refreshAt !== 'undefined') {
       (async () => {
-        await load();
+        await load(q);
         try { nav.setParams({ refreshAt: undefined }); } catch {}
       })();
     }
-  }, [refreshAt, load, nav]);
+  }, [refreshAt, load, nav, q]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { load(q); }, [load, q]));
 
-  // ===== AI 버튼: start 보장 + chatId 전달 (NaN 방지) =====
+  // ===== AI 버튼: start 보장 + chatId 전달 =====
   const onPressAI = async () => {
     try {
       const saved = await AsyncStorage.getItem(STORAGE_KEY);
@@ -126,17 +138,14 @@ export default function SellScreen() {
         nav.navigate('AIChat', { chatId: savedNum });
         return;
       }
-      if (saved && !Number.isFinite(savedNum)) {
-        await AsyncStorage.removeItem(STORAGE_KEY); // 잘못 저장된 값 정리
-      }
+      if (saved && !Number.isFinite(savedNum)) await AsyncStorage.removeItem(STORAGE_KEY);
 
       const token = await getAccessToken();
       const { data } = await api.post('/api/aichat/start', null, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const idRaw = data?.id ?? data?.aiChat?.id;
-      const id = Number(idRaw);
+      const id = Number(data?.id ?? data?.aiChat?.id);
       if (!Number.isFinite(id) || id <= 0) throw new Error('Invalid aiChat id');
 
       await AsyncStorage.setItem(STORAGE_KEY, String(id));
