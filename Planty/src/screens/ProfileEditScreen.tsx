@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   SafeAreaView,
   View,
@@ -13,15 +13,30 @@ import {
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
+import axios from 'axios';
 
 import { colors, spacing as SP, txt } from '../theme/tokens';
 import IconBack from '../../assets/icon/icon_arrowLeft.svg';
-import DefaultAvatar from '../../assets/img/btn_profileImg.svg'; // ✅ 기본 아바타
+import DefaultAvatar from '../../assets/img/btn_profileImg.svg';
 
 import type { MyStackParamList } from '../navigation/MyStack';
+import { getAccessToken } from '../utils/token';
 
 type Nav = NativeStackNavigationProp<MyStackParamList, 'ProfileEdit'>;
 type Rt  = RouteProp<MyStackParamList, 'ProfileEdit'>;
+
+const BASE_URL = 'http://43.200.244.250';
+const AVATAR = 100;
+
+const isLocalFile = (u?: string) =>
+  !!u && (u.startsWith('file://') || u.startsWith('content://'));
+
+const normalizeImagePath = (src?: string) => {
+  if (!src) return undefined;
+  if (src.startsWith('http') || src.startsWith('file://')) return src;
+  const cleaned = src.replace('/srv/app/app', '');
+  return `${BASE_URL}${cleaned.startsWith('/') ? '' : '/'}${cleaned}`;
+};
 
 export default function ProfileEditScreen() {
   const nav   = useNavigation<Nav>();
@@ -31,7 +46,14 @@ export default function ProfileEditScreen() {
 
   const [nickname, setNickname] = useState(init.nickname);
   const [userId]   = useState(init.userId);
-  const [avatar, setAvatar] = useState<string | undefined>(init.avatar);
+  // ✅ 초기 avatar를 절대 URL로 보정해서 상태에 담기
+  const [avatar, setAvatar] = useState<string | undefined>(normalizeImagePath(init.avatar));
+
+  const displayAvatar = useMemo(
+    // avatar가 로컬 파일이면 그대로, 아니면 이미 보정된 값 사용
+    () => (isLocalFile(avatar) ? avatar : avatar),
+    [avatar]
+  );
 
   const pickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -43,14 +65,59 @@ export default function ProfileEditScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.9,
     });
-    if (!res.canceled) setAvatar(res.assets[0].uri);
+    if (!res.canceled) setAvatar(res.assets[0].uri); // file:// 경로
   };
 
-  const onSave = () => {
-    // TODO: 서버 연동
-    Alert.alert('수정 완료', '변경사항이 저장되었습니다.', [
-      { text: '확인', onPress: () => nav.goBack() },
-    ]);
+  const onSave = async () => {
+    try {
+      const token = getAccessToken();
+      if (!token) {
+        Alert.alert('오류', '인증 토큰이 없습니다. 다시 로그인해 주세요.');
+        return;
+      }
+
+      const form = new FormData();
+
+      // API 명세: nickname은 JSON 문자열
+      form.append('nickname', JSON.stringify({ nickname }));
+
+      // ✅ 로컬 파일일 때만 파일 파트 추가
+      if (isLocalFile(avatar)) {
+        const uri = avatar!;
+        const filename = uri.split('/').pop() || 'profile.jpg';
+        const ext = filename.split('.').pop()?.toLowerCase();
+        const mime =
+          ext === 'png' ? 'image/png'
+          : ext === 'webp' ? 'image/webp'
+          : ext === 'heic' ? 'image/heic'
+          : 'image/jpeg';
+
+        form.append('profileImg', { uri, name: filename, type: mime } as any);
+      }
+
+      await axios.patch(`${BASE_URL}/api/mypage/profile`, form, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      Alert.alert('수정 완료', '변경사항이 저장되었습니다.', [
+        { text: '확인', onPress: () => nav.goBack() },
+      ]);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const code   = err?.response?.data?.code;
+      const msg    = err?.response?.data?.message;
+
+      if (status === 401 && code === 'UNAUTHORIZED') {
+        Alert.alert('오류', '인증되지 않은 사용자입니다.');
+      } else if (status === 405) {
+        Alert.alert('오류', '지원하지 않는 메서드입니다.');
+      } else {
+        Alert.alert('오류', msg || '프로필 수정에 실패했습니다.');
+      }
+    }
   };
 
   return (
@@ -67,8 +134,8 @@ export default function ProfileEditScreen() {
       {/* 아바타 */}
       <Pressable style={s.avatarWrap} onPress={pickAvatar} hitSlop={10}>
         <View style={s.avatarRing}>
-          {avatar ? (
-            <Image source={{ uri: avatar }} style={s.avatarImg} />
+          {displayAvatar ? (
+            <Image source={{ uri: displayAvatar }} style={s.avatarImg} />
           ) : (
             <DefaultAvatar width={AVATAR} height={AVATAR} />
           )}
@@ -119,8 +186,6 @@ export default function ProfileEditScreen() {
   );
 }
 
-const AVATAR = 100;
-
 const s = StyleSheet.create({
   header: {
     height: 59,
@@ -152,7 +217,6 @@ const s = StyleSheet.create({
   field: { gap: 8 },
   label: { color: colors.gray40, fontWeight: '600' },
 
-  // 피그마: 외곽선(#D6D6D6) / r4 / 16px padding, 12px vertical
   inputOutline: {
     borderRadius: 4,
     borderWidth: 1,
@@ -161,7 +225,6 @@ const s = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: colors.bg,
   },
-  // 피그마: 배경 #F5F5F5 / r4 / 고정값
   inputFilled: {
     borderRadius: 4,
     backgroundColor: colors.gray10,
@@ -181,7 +244,6 @@ const s = StyleSheet.create({
     paddingTop: 8,
     backgroundColor: colors.bg,
   },
-  // 피그마: #7EB85B / r4 / 12px vertical / 20 bold
   saveBtn: {
     backgroundColor: colors.green90 ?? '#7EB85B',
     borderRadius: 4,

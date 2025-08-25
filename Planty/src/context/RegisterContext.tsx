@@ -6,15 +6,14 @@ import { getAccessToken } from '../utils/token'; // accessToken 가져오기
 
 
 export type UserRegisterData = {
-  id: string;
+  id: string; 
   name: string;
-  image?: string;          // cropImg 변환
-  startDate?: string;      // startAt 변환
-  endDate?: string;        // endAt 변환
+  startDate: string;
+  endDate: string;
+  image: string;
   analysisResult?: string;
   badgeText?: string;
 };
-
 
 export type RegisterContextType = {
   userData: UserRegisterData[];
@@ -39,7 +38,7 @@ export const RegisterProvider = ({ children }: { children: ReactNode }) => {
         const token = getAccessToken();
         if (!token) return;
 
-        const response = await axios.get('http://43.200.244.250/api/crop', {
+        const response = await axios.get('http://43.200.244.250/api/crop/register', {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -48,8 +47,8 @@ export const RegisterProvider = ({ children }: { children: ReactNode }) => {
           const crops: UserRegisterData[] = response.data.data.map((c: any) => ({
             id: c.id.toString(),
             name: c.name,
-            startDate: c.startAt,
-            endDate: c.endAt,
+            startAt: c.startAt,
+            endAt: c.endAt,
             image: c.image ?? '',
             analysisResult: c.analysisResult ?? '',
           }));
@@ -85,9 +84,10 @@ export const RegisterProvider = ({ children }: { children: ReactNode }) => {
     setUserData(prev => [...prev, { ...data, id: uuidv4() }]);
   };
 
-  const deleteUserData = (name: string) => {
-    setUserData(prev => prev.filter(item => item.name !== name));
-  };
+  const deleteUserData = (id: string) => {
+  setUserData(prev => prev.filter(item => item.id !== id));
+};
+
 
   return (
     <RegisterContext.Provider

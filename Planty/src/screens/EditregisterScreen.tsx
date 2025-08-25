@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, SafeAreaView, TouchableOpacity, StyleSheet, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, SafeAreaView, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
 import { colors } from '../theme/tokens';
 import { useNavigation, NavigationProp, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
 import Arrowicon from '../../assets/icon/icon_arrowLeft.svg';
@@ -16,6 +16,14 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HORIZONTAL_PADDING = SCREEN_WIDTH * 0.04; 
 const IMAGE_WIDTH = SCREEN_WIDTH * 0.9;
 const CONTENT_WIDTH = SCREEN_WIDTH * 0.9; 
+
+// ✅ 날짜 변환 유틸 (yyyy-MM-dd 형식으로 변환)
+const formatDate = (dateString: string) => {
+  if (!dateString) return null;
+  return new Date(dateString).toISOString().split("T")[0]; 
+  // "2025-08-24" 이런 형태로 변환
+};
+
 
 export default function EditRegisterScreen() {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
@@ -71,44 +79,41 @@ export default function EditRegisterScreen() {
         return;
       }
 
-      // ✅ 수정 API
+      // ✅ 수정 API (PUT)
       if (cropId) {
         const formData = new FormData();
-        if (uploadedImage) {
+
+        formData.append("cropData", JSON.stringify({
+          name: textValue,
+          startAt: formatDate(dateValue1),
+          endAt: formatDate(dateValue2),
+        }));
+
+        if (uploadedImage && uploadedImage !== initialData.image) {
           formData.append("imageFile", {
             uri: uploadedImage,
             type: "image/jpeg",
             name: "crop.jpg",
           } as any);
         }
-        formData.append("name", textValue);
-        formData.append("startAt", dateValue1);
-        formData.append("endAt", dateValue2);
 
         const response = await axios.put(
           `http://43.200.244.250/api/crop/${cropId}`,
           formData,
           {
             headers: {
-              "Content-Type": "multipart/form-data",
               Authorization: `Bearer ${token}`,
+              "Content-Type": "multipart/form-data",
             },
           }
         );
 
         if (response.data.success) {
-          const updatedPlant = {
-            id: cropId,
-            name: textValue,
-            cropImg: uploadedImage,
-            image: uploadedImage,
-            badgeText: response.data.updatedPlant?.badgeText || "",
-            startDate: response.data.updatedPlant?.startAt || dateValue1,
-            endDate: response.data.updatedPlant?.endAt || dateValue2,
-            ...response.data.updatedPlant,
-          };
+          const updatedPlant = response.data.updatedPlant;
 
-          setUserData(prev => (prev || []).map(p => (p.id === cropId ? updatedPlant : p)));
+          setUserData(prev =>
+            (prev || []).map(p => (p.id === cropId ? updatedPlant : p))
+          );
 
           Alert.alert("완료", "작물 정보가 수정되었습니다.", [
             {
@@ -129,14 +134,14 @@ export default function EditRegisterScreen() {
         return;
       }
 
-      // ✅ 최종 등록 API
+      // ✅ 최종 등록 API (POST)
       if (tempCropId) {
         const body = {
           tempCropId,
           cropData: {
             name: textValue,
-            startAt: dateValue1,
-            endAt: dateValue2,
+            startAt: formatDate(dateValue1),
+            endAt: formatDate(dateValue2),
           },
           analysisResult,
         };
@@ -148,21 +153,9 @@ export default function EditRegisterScreen() {
         );
 
         if (response.data.success) {
-          const newPlant = {
-            id: response.data.newPlant?.id || tempCropId,
-            name: textValue,
-            cropImg: uploadedImage, // ✅ 로컬 이미지 우선
-            image: uploadedImage,
-            badgeText: response.data.newPlant?.badgeText || "",
-            startDate: response.data.newPlant?.startAt || dateValue1,
-            endDate: response.data.newPlant?.endAt || dateValue2,
-            ...response.data.newPlant,
-          };
+          const newPlant = response.data.newPlant;
 
           setUserData(prev => [...(prev || []), newPlant]);
-
-          console.log("✅ 최종 등록 response.data:", response.data);
-          console.log("✅ newPlant 객체:", newPlant);
 
           navigation.dispatch(
             CommonActions.reset({

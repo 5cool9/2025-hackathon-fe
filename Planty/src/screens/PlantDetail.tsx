@@ -1,3 +1,4 @@
+// PlantDetail.tsx
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '../navigation/types';
 import React, { useState, useEffect } from 'react';
@@ -17,9 +18,12 @@ import PlantIcon from '../../assets/icon/plant.svg';
 import axios from 'axios';
 import { getAccessToken } from '../utils/token';
 import { useRegister } from '../context/RegisterContext';
+import { useIsFocused } from '@react-navigation/native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CONTENT_WIDTH = SCREEN_WIDTH * 0.9; 
+
+const BASE_URL = "http://43.200.244.250";
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PlantDetail'>;
 
@@ -35,11 +39,7 @@ export default function PlantDetail({ route, navigation }: Props) {
   const { plantData } = route.params;
   const { deleteUserData } = useRegister();
   const { journals, deleteJournal } = useJournal();
-
-  // 로그: 전달된 plantData 확인
-  useEffect(() => {
-    console.log("route.params.plantData:", plantData);
-  }, []);
+  const isFocused = useIsFocused(); 
 
   if (!plantData.id) {
     Alert.alert("오류", "작물 ID가 없습니다.");
@@ -47,33 +47,63 @@ export default function PlantDetail({ route, navigation }: Props) {
   }
 
   const plantIdStr = plantData.id.toString();
-  const plantJournals = journals.filter(j => j.plantName === plantData.name);
+  const [plantJournals, setPlantJournals] = useState<any[]>([]); 
   const [menuVisible, setMenuVisible] = useState(false);
   const [analysis, setAnalysis] = useState<{ environment?: string; temperature?: string; height?: string; howTo?: string }>({});
+  const [selectedDiaryId, setSelectedDiaryId] = useState<string | null>(null);
 
+  
   useEffect(() => {
-    const fetchAnalysis = async () => {
+    const fetchJournals = async () => {
       try {
         const token = await getAccessToken();
         if (!token) return;
 
         const response = await axios.get(
-          `http://43.200.244.250/api/crop/analysis-status/${plantIdStr}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (response.data.success) {
-          setAnalysis(response.data.analysisResult);
+        `http://43.200.244.250/api/crop/${plantData.id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
         }
-      } catch (error: any) {
-        console.log("Analysis API Error:", error.response || error);
-      }
-    };
+      );
+      console.log("Crop API Response:", response.data);
 
-    fetchAnalysis();
-  }, [plantIdStr]);
+        if (response.status === 200) {
+  const { crop, diaries } = response.data;
 
-  const handleDeleteCrop = async (cropId?: string) => {
+  const fixedDiaries = diaries.map((d: any) => ({
+    ...d,
+    thumbnailImage: d.thumbnailImage 
+      ? `${BASE_URL}${d.thumbnailImage}` 
+      : null,
+    images: d.images 
+      ? d.images.map((img: string) =>
+          img.startsWith("/uploads/") ? `${BASE_URL}${img}` : img
+        )
+      : [],
+  }));
+
+  setPlantJournals(fixedDiaries);   // 👈 여기서 변환된 값 세팅
+  setAnalysis({
+    environment: crop.environment,
+    temperature: crop.temperature,
+    height: crop.height,
+    howTo: crop.howTo,
+  });
+}
+
+    } catch (error: any) {
+      console.log("Crop Detail API Error:", error.response || error);
+    }
+  };
+
+    if (isFocused) {  // 👈 화면에 돌아왔을 때만 새로 호출
+      fetchJournals();
+    }
+  }, [isFocused, plantData.id]);
+
+  
+
+const handleDeleteCrop = async (cropId?: string) => {
     if (!cropId) {
       Alert.alert("오류", "작물 ID가 없습니다.");
       return;
@@ -100,6 +130,7 @@ export default function PlantDetail({ route, navigation }: Props) {
       Alert.alert("실패", error.response?.data?.message || "알 수 없는 오류");
     }
   };
+
 
   const handleCompleteCrop = async (cropId?: string) => {
     if (!cropId) { Alert.alert("오류", "작물 ID가 없습니다."); return; }
@@ -144,9 +175,8 @@ export default function PlantDetail({ route, navigation }: Props) {
           <CardPlantInfo
             thumbnail={plantData.cropImg ? { uri: plantData.cropImg } : undefined}
             name={plantData.name}
-            // startAt 또는 startDate 둘 다 fallback
-            sowingDate={formatDate(plantData.startAt || plantData.startDate)}
-            harvestDate={formatDate(plantData.endAt || plantData.endDate)}
+            sowingDate={formatDate(plantData.startAt)}
+            harvestDate={formatDate(plantData.endAt)}
           />
         </View>
 
@@ -176,20 +206,33 @@ export default function PlantDetail({ route, navigation }: Props) {
             rowGap: 12,
           }}
         >
-          {plantJournals.map((item: JournalType, index: number) => (
-            <ListNote
-              key={index}
-              title={item.title}
-              preview={item.preview}
-              imageUri={item.photos?.[0]}
-              onPress={() => navigation.navigate('Journal', {
-                plantData,
-                journal: { ...item, date: item.date || new Date().toLocaleDateString() },
-              })}
-              style={{ width: '100%', marginBottom: 8 }}
-            />
-          ))}
-        </View>
+          {plantJournals.map((item, index) => (
+    <ListNote
+  key={index}
+  title={item.title}
+  preview={item.content}   
+  imageUri={item.thumbnailImage || item.images?.[0]}  
+  onPress={() => {
+    setSelectedDiaryId(item.diaryId.toString()); // 👈 선택한 일지 ID 저장
+    navigation.navigate('Journal', {
+      plantData,
+      journal: {
+        id: item.diaryId,
+        title: item.title,
+        date: item.createdAt,
+        photos: item.images || [],
+        analysisResult: item.analysisResult, 
+        preview: item.content,
+      },
+    });
+  }}
+  style={{ width: '100%', marginBottom: 8 }}
+/>
+
+
+  ))}
+
+</View>
       </ScrollView>
 
       {/* DotMenu 모달 */}
@@ -224,7 +267,7 @@ export default function PlantDetail({ route, navigation }: Props) {
                   id: plantIdStr,
                   image: plantData.cropImg ?? "",
                   name: plantData.name,
-                  startDate: plantData.startAt || plantData.startDate,
+                  startDate: plantData.startAt || plantData.startDate, 
                   endDate: plantData.endAt || plantData.endDate,
                   analysisResult: analysis, 
                   cropImg: plantData.cropImg,

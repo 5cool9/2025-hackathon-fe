@@ -1,5 +1,6 @@
+// src/screens/RegisterScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, SafeAreaView, TouchableOpacity, StyleSheet, Dimensions, Alert, Platform } from 'react-native';
+import { View, Text, SafeAreaView, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
 import { colors } from '../theme/tokens';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import Arrowicon from '../../assets/icon/icon_arrowLeft.svg';
@@ -33,82 +34,86 @@ export default function RegisterScreen() {
     !isLoading;
 
   const handleRegister = async () => {
-  console.log('--- Register 버튼 눌림 ---');
-  console.log('uploadedImage:', uploadedImage);
-  console.log('textValue:', textValue);
-  console.log('dateValue1:', dateValue1);
-  console.log('dateValue2:', dateValue2);
+    console.log('--- Register 버튼 눌림 ---');
+    console.log('uploadedImage:', uploadedImage);
+    console.log('textValue:', textValue);
+    console.log('dateValue1:', dateValue1);
+    console.log('dateValue2:', dateValue2);
 
-  if (!isButtonEnabled) {
-    if (!isValidDateRange) {
-      Alert.alert('날짜 오류', '수확 예정일은 재배 시작일 이후여야 합니다.');
-    } else {
-      Alert.alert('입력 오류', '모든 항목을 올바르게 입력해주세요.');
-    }
-    return;
-  }
-
-  setIsLoading(true);
-
-  try {
-    const token = await getAccessToken();
-    console.log('AccessToken:', token);
-
-    if (!token) {
-      Alert.alert('오류', '로그인 토큰이 없습니다.');
+    if (!isButtonEnabled) {
+      if (!isValidDateRange) {
+        Alert.alert('날짜 오류', '수확 예정일은 재배 시작일 이후여야 합니다.');
+      } else {
+        Alert.alert('입력 오류', '모든 항목을 올바르게 입력해주세요.');
+      }
       return;
     }
 
-    const formData = new FormData();
+    setIsLoading(true);
 
-    if (uploadedImage) {
-  formData.append('imageFile', {
-    uri: uploadedImage,
-    type: 'image/jpeg',
-    name: 'crop.jpg',
-  } as any);
-}
+    try {
+      const token = await getAccessToken();
+      console.log('AccessToken:', token);
 
-const cropDataObj = {
-  name: textValue,
-  startAt: dateValue1,
-  endAt: dateValue2,
-};
+      if (!token) {
+        Alert.alert('오류', '로그인 토큰이 없습니다.');
+        return;
+      }
 
-// ✅ JSON으로 감싸서 보내기
-formData.append('cropData', JSON.stringify(cropDataObj));
+      const formData = new FormData();
 
+      // 이미지 파일 추가
+      if (uploadedImage) {
+        const uriParts = uploadedImage.split('.');
+        const fileType = uriParts[uriParts.length - 1];
+        formData.append('imageFile', {
+          uri: uploadedImage,
+          type: `image/${fileType}`,
+          name: `crop.${fileType}`,
+        } as any);
+      }
 
-    const response = await axios.post(`${API_BASE_URL}/api/crop/register`, formData, {
-  headers: {
-    Authorization: `Bearer ${token}`,
-
-  },
-});
-
-
-    console.log('서버 응답:', response.data);
-
-    if (response.data.success) {
-      Alert.alert('완료', response.data.message || '작물 등록 성공');
-      navigation.navigate('AnalyzeScreen', {
-        image: uploadedImage ?? '',
+      // cropData는 JSON 문자열로 추가
+      const cropDataObj = {
         name: textValue,
-        startDate: dateValue1,
-        endDate: dateValue2,
-        tempCropId: response.data.tempCropId,
-        analysisResult: response.data.analysisResult,
+        startAt: dateValue1,
+        endAt: dateValue2,
+      };
+      formData.append('cropData', JSON.stringify(cropDataObj));
+
+      const response = await axios.post(`${API_BASE_URL}/api/crop/register`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
-    } else {
-      Alert.alert('실패', response.data.message || '등록 실패');
+
+      console.log('서버 응답:', response.data);
+
+      if (response.data.success) {
+        // 서버에서 내려온 이미지 경로 절대 URL로 변환
+        let imageUri = uploadedImage;
+        if (response.data.data?.image && !response.data.data.image.startsWith('http')) {
+          imageUri = `http://43.200.244.250${response.data.data.image.replace('/srv/app/app', '')}`;
+        }
+
+        navigation.navigate('AnalyzeScreen', {
+          image: imageUri,
+          name: textValue,
+          startDate: dateValue1,
+          endDate: dateValue2,
+          tempCropId: response.data.tempCropId,
+          analysisResult: response.data.analysisResult,
+        });
+      } else {
+        Alert.alert('실패', response.data.message || '등록 실패');
+      }
+    } catch (error: any) {
+      console.error('Register API Error:', error.response || error);
+      Alert.alert('오류', error.response?.data?.message || '알 수 없는 오류');
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error: any) {
-    console.error('Register API Error:', error.response || error);
-    Alert.alert('오류', error.response?.data?.message || '알 수 없는 오류');
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   return (
     <SafeAreaView style={styles.safe}>

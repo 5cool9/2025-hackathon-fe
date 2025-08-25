@@ -9,7 +9,8 @@ export type JournalType = {
   preview: string;     // 내용 미리보기
   photos?: string[];   // 사진 배열 (선택)
   date?: string;
-  analysisResult?: { header: string; body: string };
+  analysisResult?: { header: string; body: string; type?: string;   
+  } | null;       
 };
 
 // Context 타입 정의

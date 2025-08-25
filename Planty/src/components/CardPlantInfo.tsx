@@ -56,12 +56,12 @@ export default function ListPlantInfo({
             )}
             {!!harvestDate && (
               <View style={s.metaRow}>
-                <Text style={s.label}>{planned ? '수확 예정일' : '수확일'}</Text>
-                <Text style={s.value}>
-                  {harvestDate}
-                  {planned && harvestDateEnd ? `\n~ ${harvestDateEnd}` : ''}
-                </Text>
-              </View>
+  <Text style={s.label}>{planned ? '수확 예정일' : '수확일'}</Text>
+  <Text style={s.value}>
+    {harvestDate || '-'}
+    {planned && harvestDateEnd ? `\n~ ${harvestDateEnd}` : ''}
+  </Text>
+</View>
             )}
           </View>
         )}

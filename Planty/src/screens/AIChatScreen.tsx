@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// src/screens/AIChatScreen.tsx
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   SafeAreaView,
   View,
@@ -8,9 +9,14 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, spacing as SP, txt } from '../theme/tokens';
+import { api } from '../api/client';
+import { getAccessToken } from '../utils/token';
 
 import ChatBubble from '../components/ChatBubble';
 import ChatQuickReply from '../components/ChatQuickReply';
@@ -20,7 +26,7 @@ import IconBack from '../../assets/icon/icon_arrowLeft.svg';
 import AIProfile from '../../assets/img/img_AIprofile.svg';
 
 type Msg = {
-  id: string;
+  id: number;
   role: 'user' | 'ai';
   text?: string;
   imageUri?: string;
@@ -28,50 +34,33 @@ type Msg = {
   quick?: string[];
 };
 
-const seed: Msg[] = [
-  {
-    id: 'm1',
-    role: 'user',
-    text: '샤브샤브를 하려고 하는데 어떤 재료들이 필요하지?',
-    time: '오후 6:14',
-  },
-  {
-    id: 'm2',
-    role: 'ai',
-    text:
-      '샤브샤브에 필요한 재료들 다음과 같아요.\n' +
-      '• 배추(특히 알배추)\n' +
-      '• 청경채\n' +
-      '• 버섯류: 표고, 팽이, 느타리, 새송이\n' +
-      '• 쑥갓\n\n' +
-      '아래 키워드를 클릭하시면 판매게시글 검색결과로 이동해요.',
-    time: '오후 6:14',
-    quick: ['배추', '팽이버섯', '청경채', '표고버섯', '쑥갓'],
-  },
-  {
-    id: 'm3',
-    role: 'user',
-    text: '다음주에 텃밭에 새로운 작물을 심어보려고 하는데 작물 추천해줘',
-    time: '오후 6:14',
-  },
-];
+type AiMsg = {
+  id: number;
+  content: string;
+  sender: 'user' | 'ai';
+  createdAt: string;
+  aiImage?: string | null;
+  recommendedBoards?: any[] | null;
+};
+
+type GetChatRes = { id: number; createdAt: string; messages: AiMsg[] };
+type SendRes = { userMessage: AiMsg; aiMessage: AiMsg };
+
+const STORAGE_KEY = 'aiChatId';
+const makeTempId = () => -Math.floor(Date.now() + Math.random() * 1000);
 
 export default function AIChatScreen() {
-  // ❗️반드시 괄호 포함해 호출해야 함 (괄호 누락 시 any 함수로 인식되어 goBack/getParent 에러 발생)
   const nav = useNavigation<any>();
+  const route = useRoute<any>();
+  const passedChatId: number | undefined = route?.params?.chatId;
 
-  // 퀵리플라이 → 판매 탭의 리스트로 이동 + 검색어 전달
-  const goToSellSearch = (label: string) => {
-    nav.getParent()?.navigate('Sell', {
-      screen: 'SellList',
-      params: { q: label },
-    });
-  };
+  const [chatId, setChatId] = useState<number | null>(null);
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [loading, setLoading] = useState(true);
+  const sendingRef = useRef(false);
 
-  const [msgs, setMsgs] = useState<Msg[]>(seed);
-
-  const now = () => {
-    const d = new Date();
+  const nowK = (iso?: string) => {
+    const d = iso ? new Date(iso) : new Date();
     const h = d.getHours();
     const ap = h >= 12 ? '오후' : '오전';
     const hh = ((h + 11) % 12) + 1;
@@ -79,42 +68,126 @@ export default function AIChatScreen() {
     return `${ap} ${hh}:${mm}`;
   };
 
-  // 텍스트 전송
-  const handleSendText = (text: string) => {
-    const userMsg: Msg = { id: `u-${Date.now()}`, role: 'user', text, time: now() };
-    setMsgs(prev => [...prev, userMsg]);
-
-    // 데모용 더미 응답
-    setTimeout(() => {
-      setMsgs(prev => [
-        ...prev,
-        {
-          id: `a-${Date.now()}`,
-          role: 'ai',
-          text: `“${text}”에 대한 예시 답변입니다.`,
-          time: now(),
-          quick: ['상추', '방울토마토', '청경채'],
-        },
-      ]);
-    }, 300);
+  const authHeaders = async () => {
+    const token = await getAccessToken();
+    return { Authorization: `Bearer ${token}` };
   };
 
-  // 이미지 전송(갤러리 선택)
-  const handleSendImage = (uri: string) => {
-    const userMsg: Msg = { id: `uimg-${Date.now()}`, role: 'user', imageUri: uri, time: now() };
-    setMsgs(prev => [...prev, userMsg]);
+  const aiToUi = (m: AiMsg): Msg => ({
+    id: m.id,
+    role: m.sender === 'ai' ? 'ai' : 'user',
+    text: m.content,
+    time: nowK(m.createdAt),
+    quick: Array.isArray(m.recommendedBoards) && m.recommendedBoards.length
+      ? m.recommendedBoards.map((b: any) => b?.title ?? '열람하기')
+      : undefined,
+  });
 
-    setTimeout(() => {
+  const loadChat = useCallback(async (id: number) => {
+    if (!Number.isFinite(id) || id <= 0) throw new Error('Invalid chatId for GET');
+    const { data } = await api.get<GetChatRes>(`/api/aichat/${id}`, {
+      headers: await authHeaders(),
+    });
+    setChatId(data.id);
+    setMsgs(data.messages.map(aiToUi));
+  }, []);
+
+  const startChat = useCallback(async () => {
+    const { data } = await api.post(`/api/aichat/start`, null, {
+      headers: await authHeaders(),
+    });
+    const id = Number(data?.id ?? data?.aiChat?.id);
+    if (!Number.isFinite(id) || id <= 0) throw new Error('Invalid aiChat start response');
+    setChatId(id);
+    await AsyncStorage.setItem(STORAGE_KEY, String(id));
+    return id;
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+
+        // 1) 네비 파라미터 우선
+        if (typeof passedChatId === 'number' && Number.isFinite(passedChatId) && passedChatId > 0) {
+          setChatId(passedChatId);
+          await AsyncStorage.setItem(STORAGE_KEY, String(passedChatId));
+          await loadChat(passedChatId);
+          return;
+        }
+
+        // 2) 저장된 값
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        const sid = Number(stored);
+        if (Number.isFinite(sid) && sid > 0) {
+          await loadChat(sid);
+          return;
+        }
+
+        // 3) 잘못 저장된 값 제거 후 새로 생성
+        if (stored && !Number.isFinite(sid)) await AsyncStorage.removeItem(STORAGE_KEY);
+        const newId = await startChat();
+        await loadChat(newId);
+      } catch (err) {
+        console.warn(err);
+        Alert.alert('알림', 'AI 채팅방을 불러오지 못했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [passedChatId, loadChat, startChat]);
+
+  const goToSellSearch = (label: string) => {
+    nav.getParent()?.navigate('Sell', { screen: 'SellList', params: { q: label } });
+  };
+
+  const handleSendText = async (text: string) => {
+    if (!chatId || sendingRef.current) return;
+    sendingRef.current = true;
+
+    const tempId = makeTempId();
+    const optimistic: Msg = { id: tempId, role: 'user', text, time: nowK() };
+    setMsgs(prev => [...prev, optimistic]);
+
+    try {
+      const { data } = await api.post<SendRes>(
+        `/api/aichat/${chatId}/send`,
+        null,
+        { params: { content: text }, headers: await authHeaders() },
+      );
+
+      setMsgs(prev => {
+        const patched = prev.map(m =>
+          m.id === tempId
+            ? { ...m, id: data.userMessage.id, time: nowK(data.userMessage.createdAt) }
+            : m,
+        );
+        return [...patched, aiToUi(data.aiMessage)];
+      });
+    } catch (err: any) {
+      console.warn(err);
       setMsgs(prev => [
-        ...prev,
-        { id: `aimg-${Date.now()}`, role: 'ai', text: '이미지 잘 받았어요! 👀', time: now() },
+        ...prev.filter(m => m.id !== tempId),
+        { id: makeTempId(), role: 'ai', text: '전송에 실패했어요. 잠시 후 다시 시도해 주세요.', time: nowK() },
       ]);
-    }, 300);
+      if (err?.response?.status === 401) {
+        Alert.alert('인증 필요', '로그인이 필요합니다.');
+      }
+    } finally {
+      sendingRef.current = false;
+    }
+  };
+
+  const handleSendImage = (uri: string) => {
+    setMsgs(prev => [
+      ...prev,
+      { id: makeTempId(), role: 'user', imageUri: uri, time: nowK() },
+      { id: makeTempId(), role: 'ai', text: '이미지는 현재 텍스트 분석만 지원해요 🙇‍♀️', time: nowK() },
+    ]);
   };
 
   const renderItem = ({ item }: { item: Msg }) => {
     const isMe = item.role === 'user';
-
     return (
       <View style={{ marginBottom: 12 }}>
         <ChatBubble
@@ -123,16 +196,13 @@ export default function AIChatScreen() {
           imageSource={item.imageUri ? { uri: item.imageUri } : undefined}
           time={item.time}
           showAvatar={!isMe}
-          // ChatBubble에 avatarElement prop이 있어야 합니다.
           avatarElement={!isMe ? <AIProfile width={36} height={36} /> : undefined}
         />
-
-        {/* AI 퀵리플라이 → 판매 검색으로 이동 */}
         {!isMe && item.quick?.length ? (
           <ChatQuickReply
             options={item.quick}
             align="left"
-            indentLeft={44}       // 아바타(36) + gap(8)
+            indentLeft={44}
             maxInline={3}
             onPressOption={goToSellSearch}
             style={{ marginTop: 4 }}
@@ -144,7 +214,6 @@ export default function AIChatScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* 헤더 */}
       <View style={s.header}>
         <Pressable onPress={() => nav.goBack()} hitSlop={10} style={s.backBtn}>
           <IconBack width={28} height={28} />
@@ -153,20 +222,26 @@ export default function AIChatScreen() {
         <View style={{ width: 24, height: 24 }} />
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.select({ ios: 'padding', android: undefined })}
-      >
-        <FlatList
-          data={msgs}
-          keyExtractor={(m) => m.id}
-          renderItem={renderItem}
-          contentContainerStyle={s.listContent}
-          ItemSeparatorComponent={() => <View style={{ height: 0 }} />}
-          ListHeaderComponent={<Text style={[txt.B4, s.dateText]}>2025.08.17</Text>}
-        />
-
-        <ChatInputBar onSendText={handleSendText} onSendImage={handleSendImage} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.select({ ios: 'padding', android: undefined })}>
+        {loading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator />
+          </View>
+        ) : (
+          <>
+            <FlatList
+              data={msgs}
+              keyExtractor={(m) => String(m.id)}
+              renderItem={renderItem}
+              contentContainerStyle={s.listContent}
+              ItemSeparatorComponent={() => <View style={{ height: 0 }} />}
+              ListHeaderComponent={
+                msgs.length ? <Text style={[txt.B4, s.dateText]}>{new Date().toISOString().slice(0, 10)}</Text> : null
+              }
+            />
+            <ChatInputBar onSendText={handleSendText} onSendImage={handleSendImage} />
+          </>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -182,14 +257,6 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
   },
   backBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  listContent: {
-    paddingHorizontal: SP.lg,
-    paddingBottom: 12,
-    gap: 12,
-  },
-  dateText: {
-    color: colors.gray25,
-    textAlign: 'center',
-    marginVertical: 8,
-  },
+  listContent: { paddingHorizontal: SP.lg, paddingBottom: 12, gap: 12 },
+  dateText: { color: colors.gray25, textAlign: 'center', marginVertical: 8 },
 });

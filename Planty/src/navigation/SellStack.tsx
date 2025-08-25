@@ -1,3 +1,4 @@
+// src/navigation/SellStack.tsx
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -36,12 +37,13 @@ export type SellCreateEditPayload = {
 };
 
 export type SellStackParamList = {
-  SellList: { q?: string } | undefined;
+ SellList: { q?: string; refreshAt?: number };
   SellDetail:
     | { postId: string; isMine?: boolean }
     | { draft: CreatedPostDraft; isMine: true };
 
-  DiaryList:   { userId: string; userName: string };
+  // ✅ boardId 기준으로 수정
+  DiaryList:   { boardId: string; userName: string };
   DiaryDetail: { noteId: string };
 
   // 글쓰기(신규/수정 겸용)

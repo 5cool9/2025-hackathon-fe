@@ -14,13 +14,49 @@ import { colors, spacing, radius, txt } from '../theme/tokens';
 type Props = {
   nickname: string;
   message: string;
-  time: string;
-  unreadCount?: number; // 없거나 0이면 배지 안보임
+  time: string;                // "오후 7:34" 또는 "2025-08-19T22:03:58" 등
+  unreadCount?: number;
   avatarUri?: string;
   avatarSource?: ImageSourcePropType;
   onPress?: () => void;
   style?: ViewStyle;
 };
+
+// ✅ 어떤 포맷이 들어와도 HH:mm(24h)로 통일
+function to24h(input?: string) {
+  if (!input) return '';
+
+  // 1) ISO 날짜 문자열인 경우
+  const ts = Date.parse(input);
+  if (!Number.isNaN(ts)) {
+    const d = new Date(ts);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
+  // 2) "오전/오후 HH:MM" 또는 "AM/PM HH:MM" 같은 경우
+  const hasPM = /오후|PM/i.test(input);
+  const hasAM = /오전|AM/i.test(input);
+  const pure = input.replace(/[^\d:]/g, ''); // 숫자와 콜론만 남김
+  const m = pure.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) {
+    let h = parseInt(m[1], 10);
+    const mm = m[2];
+
+    if (hasPM && h < 12) h += 12;
+    if (hasAM && h === 12) h = 0;
+
+    const hh = String(h).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
+  // 3) 이미 "HH:MM" 같은 24h 포맷이면 그대로
+  if (/^\d{2}:\d{2}$/.test(input)) return input;
+
+  // 예외: 그대로 반환
+  return input;
+}
 
 function ListChat({
   nickname,
@@ -47,26 +83,26 @@ function ListChat({
       />
 
       {/* 닉네임 + 메시지 */}
-    <View style={styles.textBox}>
-    <Text style={[txt.B1, { color: colors.gray40 }]} numberOfLines={1}>
-        {nickname}
-    </Text>
-    <Text
-        style={[
-        txt.B3,
-        unreadCount > 0
-            ? { color: colors.gray70, fontWeight: '600' } // 안읽은 메시지
-            : { color: colors.subText, fontWeight: '500' } // 읽은 메시지
-        ]}
-        numberOfLines={1}
-    >
-        {message}
-    </Text>
-    </View>
+      <View style={styles.textBox}>
+        <Text style={[txt.B1, { color: colors.gray40 }]} numberOfLines={1}>
+          {nickname}
+        </Text>
+        <Text
+          style={[
+            txt.B3,
+            unreadCount > 0
+              ? { color: colors.gray70, fontWeight: '600' }
+              : { color: colors.subText, fontWeight: '500' },
+          ]}
+          numberOfLines={1}
+        >
+          {message}
+        </Text>
+      </View>
 
       {/* 시간 + 배지 */}
       <View style={styles.rightBox}>
-        <Text style={styles.time}>{time}</Text>
+        <Text style={styles.time}>{to24h(time)}</Text>
         {hasUnread && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{unreadCount}</Text>

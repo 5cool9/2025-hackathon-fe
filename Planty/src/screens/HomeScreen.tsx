@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import axios from 'axios';
@@ -35,10 +35,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeNav>();
+  const route = useRoute<RouteProp<HomeStackParamList, 'HomeMain'>>();
   const [plantList, setPlantList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  /** ✅ 사용자 등록 작물 가져오기 */
   const fetchUserCrops = async () => {
     try {
       setLoading(true);
@@ -49,7 +49,7 @@ export default function HomeScreen() {
         return;
       }
 
-      const response = await axios.get('http://43.200.244.250/api/diary/crops', {
+      const response = await axios.get('http://43.200.244.250/api/crop', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -60,7 +60,6 @@ export default function HomeScreen() {
             if (item.cropImg.startsWith('http') || item.cropImg.startsWith('file://')) {
               imageUri = item.cropImg;
             } else {
-              // DB 경로에서 /srv/app/app 제거 후 서버 URL 붙이기
               imageUri = `http://43.200.244.250${item.cropImg.replace('/srv/app/app', '')}`;
             }
           }
@@ -86,10 +85,16 @@ export default function HomeScreen() {
   };
 
   useFocusEffect(
-    React.useCallback(() => {
-      fetchUserCrops();
-    }, [])
-  );
+  React.useCallback(() => {
+    const updatedPlant = route.params?.updatedPlant;
+    if (updatedPlant) {
+      setPlantList(prev =>
+        prev.map(p => (p.id === updatedPlant.id ? { ...p, ...updatedPlant } : p))
+      );
+    }
+    fetchUserCrops();
+  }, [route.params?.updatedPlant])
+);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -153,7 +158,7 @@ export default function HomeScreen() {
               name={item.name ?? '이름 없음'}
               badgeText={item.badgeText ?? ''}
               sowingDate={item.startAt}
-              harvestDate={item.endAt}
+              harvestDate={item.endAt ?? item.harvestDateEnd} 
               thumbnail={item.cropImg ? { uri: item.cropImg } : undefined}
               onPress={() =>
                 navigation.navigate('PlantDetail', {
@@ -162,8 +167,8 @@ export default function HomeScreen() {
                     name: item.name,
                     image: item.cropImg ?? undefined,
                     cropImg: item.cropImg ?? undefined,
-                    startAt: item.plantingDate, 
-                    endAt: item.endDate ?? item.harvestDateEnd,
+                    startAt: item.plantingDate,
+                    endAt: item.endAt, 
                     badgeText: item.badgeText ?? '',
                   },
                 })

@@ -1,3 +1,4 @@
+// src/navigation/MyStack.tsx.tsx
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -7,6 +8,7 @@ import ProfileEditScreen from '../screens/ProfileEditScreen';
 export type MyStackParamList = {
   MyHome: undefined;
   ProfileEdit: { nickname: string; userId: string; avatar?: string } | undefined;
+  BoardDetail: { boardId: string }; 
 };
 
 const Stack = createNativeStackNavigator<MyStackParamList>();
